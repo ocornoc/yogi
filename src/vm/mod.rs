@@ -222,6 +222,7 @@ impl VMExec {
                 self.set_next_instr();
             },
             Instr::JumpRel { amount, condition } =>
+                // SAFE: only one ref taken
                 if unsafe { self.num_mut(condition).as_bool() } {
                     self.next_instr += amount;
                 },
@@ -232,6 +233,7 @@ impl VMExec {
                 self.set_next_line(next_line);
                 return Some(true);
             },
+            // SAFE: all registers are guaranteed not to alias
             Instr::MoveSV { arg, out } => unsafe {
                 let s = self.str_mut(arg);
                 let value = self.val_mut(out);
@@ -242,12 +244,14 @@ impl VMExec {
                 }
                 self.set_next_instr();
             },
+            // SAFE: all registers are guaranteed not to alias
             Instr::MoveNV { arg, out } => unsafe {
                 *self.val_mut(out) = Value::Number(*self.num_mut(arg));
                 self.set_next_instr();
             },
             Instr::MoveVV { arg, out } => todo!(),
             Instr::MoveVS { arg, out } => todo!(),
+            // SAFE: all registers are guaranteed not to alias
             Instr::MoveVN { arg, out } => if let Value::Number(n) = unsafe { self.val_mut(arg) } {
                 unsafe { *self.num_mut(out) = *n };
                 self.set_next_instr();
