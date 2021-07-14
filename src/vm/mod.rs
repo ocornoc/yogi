@@ -299,12 +299,13 @@ impl VMExec {
     }
 
     pub fn step(&mut self) {
-        let init_line = self.cur_line;
-        while self.cur_line == init_line {
+        loop {
             match self.step_aux() {
                 Some(true) => return,
-                Some(false) => (),
                 None => self.runtime_err(),
+                Some(false) => if matches!(self.code[self.next_instr], Instr::LineStart(_)) {
+                    return;
+                },
             }
         }
     }
