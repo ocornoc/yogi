@@ -28,7 +28,7 @@ type Line = u8;
 #[derive(Debug, Clone)]
 enum Instr {
     LineStart(Line),
-    JumpRel(isize),
+    JumpRel { amount: usize, condition: NumberReg },
     JumpLine(NumberReg),
     MoveSV { arg: StringReg, out: ValueReg },
     MoveNV { arg: NumberReg, out: ValueReg },
@@ -221,11 +221,10 @@ impl VMExec {
                 self.line_stats[line as usize] += 1;
                 self.set_next_instr();
             },
-            Instr::JumpRel(i) => if i.is_negative() {
-                self.next_instr -= i.abs() as usize;
-            } else {
-                self.next_instr += i as usize;
-            },
+            Instr::JumpRel { amount, condition } =>
+                if unsafe { self.num_mut(condition).as_bool() } {
+                    self.next_instr += amount;
+                },
             Instr::JumpLine(reg) => {
                 // SAFE: only one ref taken
                 let result = unsafe { self.num_mut(reg).as_f32() };
@@ -300,7 +299,6 @@ impl VMExec {
     }
 
     pub fn step(&mut self) {
-
         let init_line = self.cur_line;
         while self.cur_line == init_line {
             match self.step_aux() {
