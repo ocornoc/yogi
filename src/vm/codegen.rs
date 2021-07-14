@@ -30,7 +30,14 @@ impl From<Script> for VMExec {
                     Statement::Goto(expr) => {
                         let num = match expression_codegen(&mut vm, &mut data, expr) {
                             AnyReg::Number(n) => n,
-                            AnyReg::String(_) => vm.new_num_reg((line_num as i64 + 1).into()),
+                            AnyReg::String(arg) => {
+                                let out = vm.new_val_reg(Value::Str(YString::default()));
+                                vm.code.push(Instr::MoveSV { arg, out });
+                                let arg = out;
+                                let out = vm.new_num_reg(Number::ZERO);
+                                vm.code.push(Instr::MoveVN { arg, out });
+                                out
+                            },
                             AnyReg::Value(arg) => {
                                 let out = vm.new_num_reg(Number::ZERO);
                                 vm.code.push(Instr::MoveVN { arg, out });
