@@ -183,6 +183,15 @@ impl VMExec {
         self.set_next_line(line);
     }
 
+    unsafe fn num_ref<'a>(&'a self, reg: NumberReg) -> &'a Number {
+        let cell = if cfg!(debug_assertions) {
+            &self.numbers[reg.0 as usize]
+        } else {
+            self.numbers.get_unchecked(reg.0 as usize)
+        };
+        &*cell.get()
+    }
+
     unsafe fn num_mut<'a>(&'a self, reg: NumberReg) -> &'a mut Number {
         let cell = if cfg!(debug_assertions) {
             &self.numbers[reg.0 as usize]
@@ -192,6 +201,15 @@ impl VMExec {
         &mut *cell.get()
     }
 
+    unsafe fn str_ref<'a>(&'a self, reg: StringReg) -> &'a YString {
+        let cell = if cfg!(debug_assertions) {
+            &self.strings[reg.0 as usize]
+        } else {
+            self.strings.get_unchecked(reg.0 as usize)
+        };
+        &*cell.get()
+    }
+
     unsafe fn str_mut<'a>(&'a self, reg: StringReg) -> &'a mut YString {
         let cell = if cfg!(debug_assertions) {
             &self.strings[reg.0 as usize]
@@ -199,6 +217,15 @@ impl VMExec {
             self.strings.get_unchecked(reg.0 as usize)
         };
         &mut *cell.get()
+    }
+
+    unsafe fn val_ref<'a>(&'a self, reg: ValueReg) -> &'a Value {
+        let cell = if cfg!(debug_assertions) {
+            &self.values[reg.0 as usize]
+        } else {
+            self.values.get_unchecked(reg.0 as usize)
+        };
+        &*cell.get()
     }
 
     unsafe fn val_mut<'a>(&'a self, reg: ValueReg) -> &'a mut Value {
@@ -318,9 +345,12 @@ impl VMExec {
         self.globals
             .iter()
             .map(move |(s, &r)| (s.as_str(), match r {
-                AnyReg::Number(reg) => unsafe { Value::Number(self.num_mut(reg).clone()) },
-                AnyReg::String(reg) => unsafe { Value::Str(self.str_mut(reg).clone()) },
-                AnyReg::Value(reg) => unsafe { self.val_mut(reg).clone() },
+                // SAFE: we only take immutable ref
+                AnyReg::Number(reg) => unsafe { Value::Number(self.num_ref(reg).clone()) },
+                // SAFE: we only take immutable ref
+                AnyReg::String(reg) => unsafe { Value::Str(self.str_ref(reg).clone()) },
+                // SAFE: we only take immutable ref
+                AnyReg::Value(reg) => unsafe { self.val_ref(reg).clone() },
             }))
     }
 }
