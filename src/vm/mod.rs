@@ -8,6 +8,7 @@ use std::cell::{Cell, UnsafeCell};
 const STRING_CAP: usize = 2_usize.pow(16);
 
 mod codegen;
+pub mod analysis;
 
 type Reg = u16;
 
