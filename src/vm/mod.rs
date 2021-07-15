@@ -49,8 +49,6 @@ enum Instr {
     DecS { arg: StringReg, out: StringReg },
     DecN { arg: NumberReg, out: NumberReg },
     DecV { arg: ValueReg, out: ValueReg },
-    IsTruthyS { arg: StringReg, out: NumberReg },
-    IsTruthyN { arg: NumberReg, out: NumberReg },
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -79,16 +77,17 @@ impl AnyReg {
 }
 
 macro_rules! inc_dec {
-    ($self:ident, $arg:ident, $out:ident, $f:ident, $e:expr) => {
+    ($self:ident, $arg:ident, $out:ident, $f:ident, $e1:expr, $e2:expr $(, )?) => {
         {
             if $arg == $out {
                 // SAFE: only one mut ref is taken
-                unsafe { $self.$f($arg).pre_inc() };
+                let $arg = unsafe { $self.$f($arg) };
+                $e1
             } else {
                 // SAFE: the two registers are different
                 let $arg = unsafe { $self.$f($arg) };
                 let $out = unsafe { $self.$f($out) };
-                $e;
+                $e2;
             }
             $self.set_next_instr();
         }
@@ -312,19 +311,17 @@ impl VMExec {
             Instr::SubN { arg1, arg2, out } => todo!(),
             Instr::SubV { arg1, arg2, out } => todo!(),
             Instr::IncS { arg, out } => 
-                inc_dec!(self, arg, out, str_mut, arg.post_inc_s(out)),
+                inc_dec!(self, arg, out, str_mut, arg.pre_inc(), arg.post_inc_s(out)),
             Instr::IncN { arg, out } =>
-                inc_dec!(self, arg, out, num_mut, *out = arg.post_inc()),
+                inc_dec!(self, arg, out, num_mut, arg.pre_inc(), *out = arg.post_inc()),
             Instr::IncV { arg, out } =>
-                inc_dec!(self, arg, out, val_mut, arg.post_inc(out)),
+                inc_dec!(self, arg, out, val_mut, arg.pre_inc(), arg.post_inc(out)),
             Instr::DecS { arg, out } =>
-                inc_dec!(self, arg, out, str_mut, arg.post_dec_s(out).ok()?),
+                inc_dec!(self, arg, out, str_mut, arg.pre_dec().ok()?, arg.post_dec_s(out).ok()?),
             Instr::DecN { arg, out } =>
-                inc_dec!(self, arg, out, num_mut, *out = arg.post_dec()),
+                inc_dec!(self, arg, out, num_mut, arg.pre_dec(), *out = arg.post_dec()),
             Instr::DecV { arg, out } =>
-                inc_dec!(self, arg, out, val_mut, arg.post_dec(out).ok()?),
-            Instr::IsTruthyS { arg, out } => todo!(),
-            Instr::IsTruthyN { arg, out } => todo!(),
+                inc_dec!(self, arg, out, val_mut, arg.pre_dec().ok()?, arg.post_dec(out).ok()?),
         };
         Some(false)
     }
