@@ -13,46 +13,7 @@ impl From<Script> for VMExec {
             vm.line_starts[line_num] = vm.code.len();
             vm.code.push(Instr::LineStart(line_num as u8));
             for statement in line.0 {
-                match statement {
-                    Statement::Assign(var, style, mut expr) =>
-                        if let AnyReg::Value(out) = var_codegen(&mut vm, &mut data, var.clone()) {
-                            expr = apply_assign_style(var, style, expr);
-                            let arg = expression_codegen(&mut vm, &mut data, expr);
-                            vm.code.push(match arg {
-                                AnyReg::Number(arg) => Instr::MoveNV { arg, out },
-                                AnyReg::String(arg) => Instr::MoveSV { arg, out },
-                                AnyReg::Value(arg) => Instr::MoveVV { arg, out },
-                            })
-                        } else {
-                            unreachable!();
-                        },
-                    Statement::IfThenElse(_, _, _) => todo!(),
-                    Statement::Goto(expr) => {
-                        let num = match expression_codegen(&mut vm, &mut data, expr) {
-                            AnyReg::Number(n) => n,
-                            AnyReg::String(arg) => {
-                                let out = vm.new_val_reg(Value::Str(YString::default()));
-                                vm.code.push(Instr::MoveSV { arg, out });
-                                let arg = out;
-                                let out = vm.new_num_reg(Number::ZERO);
-                                vm.code.push(Instr::MoveVN { arg, out });
-                                out
-                            },
-                            AnyReg::Value(arg) => {
-                                let out = vm.new_num_reg(Number::ZERO);
-                                vm.code.push(Instr::MoveVN { arg, out });
-                                out
-                            },
-                        };
-                        vm.code.push(Instr::JumpLine(num));
-                    },
-                    Statement::PreInc(var) | Statement::PostInc(var) => {
-                        expression_codegen(&mut vm, &mut data, Expr::PreInc(var));
-                    },
-                    Statement::PreDec(var) | Statement::PostDec(var) => {
-                        expression_codegen(&mut vm, &mut data, Expr::PreDec(var));
-                    },
-                }
+                vm.codegen_statement(statement, &mut data);
             }
         }
         vm.globals.extend(data.var_map
@@ -61,6 +22,72 @@ impl From<Script> for VMExec {
             .map(|(var, reg)| (var.name, reg))
         );
         vm
+    }
+}
+
+impl VMExec {
+    fn codegen_statement(&mut self, statement: Statement, data: &mut CodegenData) {
+        match statement {
+            Statement::Assign(var, style, mut expr) =>
+                if let AnyReg::Value(out) = var_codegen(self, data, var.clone()) {
+                    expr = apply_assign_style(var, style, expr);
+                    let arg = expression_codegen(self, data, expr);
+                    self.code.push(match arg {
+                        AnyReg::Number(arg) => Instr::MoveNV { arg, out },
+                        AnyReg::String(arg) => Instr::MoveSV { arg, out },
+                        AnyReg::Value(arg) => Instr::MoveVV { arg, out },
+                    })
+                } else {
+                    unreachable!();
+                },
+            Statement::IfThenElse(cond, t, e) => {
+                let cond = expression_codegen(self, data, cond).into_num(self);
+                let cond_len = self.code.len();
+                self.code.push(Instr::JumpRel { amount: 0, condition: None });
+                for statement in e {
+                    self.codegen_statement(statement, data);
+                }
+                let e_len = self.code.len();
+                self.code.push(Instr::JumpRel { amount: 0, condition: None });
+                for statement in t {
+                    self.codegen_statement(statement, data);
+                }
+                let t_len = self.code.len();
+                self.code[cond_len] = Instr::JumpRel {
+                    amount: e_len - cond_len,
+                    condition: Some(cond),
+                };
+                self.code[e_len] = Instr::JumpRel {
+                    amount: t_len - e_len,
+                    condition: None,
+                };
+            }
+            Statement::Goto(expr) => {
+                let num = match expression_codegen(self, data, expr) {
+                    AnyReg::Number(n) => n,
+                    AnyReg::String(arg) => {
+                        let out = self.new_val_reg(Value::Str(YString::default()));
+                        self.code.push(Instr::MoveSV { arg, out });
+                        let arg = out;
+                        let out = self.new_num_reg(Number::ZERO);
+                        self.code.push(Instr::MoveVN { arg, out });
+                        out
+                    },
+                    AnyReg::Value(arg) => {
+                        let out = self.new_num_reg(Number::ZERO);
+                        self.code.push(Instr::MoveVN { arg, out });
+                        out
+                    },
+                };
+                self.code.push(Instr::JumpLine(num));
+            },
+            Statement::PreInc(var) | Statement::PostInc(var) => {
+                expression_codegen(self, data, Expr::PreInc(var));
+            },
+            Statement::PreDec(var) | Statement::PostDec(var) => {
+                expression_codegen(self, data, Expr::PreDec(var));
+            },
+        }
     }
 }
 
