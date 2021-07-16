@@ -4,6 +4,9 @@ version = "0.1.0"
 edition = "2018"
 license = "MIT OR Apache-2.0"
 
+[features]
+bench = ["firestorm/enable_system_time"]
+
 [profile.release]
 lto = "fat"
 
@@ -11,3 +14,4 @@ lto = "fat"
 thiserror = "1.0.26"
 petgraph = "0.6.0"
 ahash = "0.7.4"
+firestorm = "0.4.6"

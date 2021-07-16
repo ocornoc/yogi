@@ -244,6 +244,7 @@ impl VMExec {
     }
 
     fn runtime_err(&mut self) {
+        firestorm::profile_method!("runtime_err");
         let line = if self.cur_line == NUM_LINES as u8 - 1 {
             0
         } else {
@@ -312,12 +313,14 @@ impl VMExec {
     }
 
     fn line_start(&mut self, line: Line) {
+        firestorm::profile_method!("line_start");
         self.cur_line = line;
         self.line_stats[line as usize] += 1;
         self.set_next_instr();
     }
 
     fn jump_rel(&mut self, amount: usize, condition: Option<NumberReg>) {
+        firestorm::profile_method!("jump_rel");
         if let Some(condition) = condition {
             // SAFE: only one ref taken
             if unsafe { self.num_mut(condition).as_bool() } {
@@ -329,6 +332,7 @@ impl VMExec {
     }
 
     fn jump_line(&mut self, reg: NumberReg) {
+        firestorm::profile_method!("jump_line");
         // SAFE: only one ref taken
         let result = unsafe { self.num_mut(reg).as_f32() };
         let next_line = (result.floor() as usize).clamp(1, NUM_LINES) - 1;
@@ -336,6 +340,7 @@ impl VMExec {
     }
 
     fn move_sv(&mut self, arg: StringReg, out: ValueReg) {
+        firestorm::profile_method!("move_sv");
         // SAFE: all registers are guaranteed not to alias
         let s = unsafe { self.str_mut(arg) };
         let value = unsafe { self.val_mut(out) };
@@ -348,12 +353,14 @@ impl VMExec {
     }
 
     fn move_nv(&mut self, arg: NumberReg, out: ValueReg) {
+        firestorm::profile_method!("move_nv");
         // SAFE: all registers are guaranteed not to alias
         *unsafe { self.val_mut(out) } = Value::Number(*unsafe { self.num_mut(arg) });
         self.set_next_instr();
     }
 
     fn move_vv(&mut self, arg: ValueReg, out: ValueReg) {
+        firestorm::profile_method!("move_vv");
         if arg != out {
             // SAFE: all registers are guaranteed not to alias
             unsafe { self.val_mut(out).clone_from(self.val_mut(arg)) };
@@ -362,6 +369,7 @@ impl VMExec {
     }
 
     fn move_vn(&mut self, arg: ValueReg, out: NumberReg) -> Option<()>  {
+        firestorm::profile_method!("move_vn");
         if let Value::Number(n) = unsafe { self.val_mut(arg) } {
             unsafe { *self.num_mut(out) = *n };
             self.set_next_instr();
@@ -372,6 +380,7 @@ impl VMExec {
     }
 
     fn add_s(&mut self, arg1: StringReg, arg2: StringReg, out: StringReg) {
+        firestorm::profile_method!("add_s");
         binop!(self, arg1, arg2, out, str_mut,
             *arg1 = YString(arg1.repeat(2)),
             *arg1 += arg2,
@@ -381,6 +390,7 @@ impl VMExec {
     }
 
     fn add_n(&mut self, arg1: NumberReg, arg2: NumberReg, out: NumberReg) {
+        firestorm::profile_method!("add_n");
         binop!(self, arg1, arg2, out, num_mut,
             *arg1 += *arg1,
             *arg1 += *arg2,
@@ -390,6 +400,7 @@ impl VMExec {
     }
 
     fn add_v(&mut self, arg1: ValueReg, arg2: ValueReg, out: ValueReg) {
+        firestorm::profile_method!("add_v");
         binop!(self, arg1, arg2, out, val_mut,
             match arg1 {
                 Value::Number(n) => *n += *n,
@@ -402,6 +413,7 @@ impl VMExec {
     }
 
     fn sub_s(&mut self, arg1: StringReg, arg2: StringReg, out: StringReg) {
+        firestorm::profile_method!("sub_s");
         binop!(self, arg1, arg2, out, str_mut,
             *arg1 -= {
                 let buffer = unsafe { self.get_buffer() };
@@ -415,6 +427,7 @@ impl VMExec {
     }
 
     fn sub_n(&mut self, arg1: NumberReg, arg2: NumberReg, out: NumberReg) {
+        firestorm::profile_method!("sub_n");
         binop!(self, arg1, arg2, out, num_mut,
             *arg1 -= *arg1,
             *arg1 -= *arg2,
@@ -424,6 +437,7 @@ impl VMExec {
     }
 
     fn sub_v(&mut self, arg1: ValueReg, arg2: ValueReg, out: ValueReg) {
+        firestorm::profile_method!("sub_v");
         binop!(self, arg1, arg2, out, val_mut,
             match arg1 {
                 Value::Number(n) => *n -= *n,
@@ -440,32 +454,39 @@ impl VMExec {
     }
 
     fn inc_s(&mut self, arg: StringReg, out: StringReg) {
+        firestorm::profile_method!("inc_s");
         unop!(self, arg, out, str_mut, arg.pre_inc(), arg.post_inc_s(out));
     }
 
     fn inc_n(&mut self, arg: NumberReg, out: NumberReg) {
+        firestorm::profile_method!("inc_n");
         unop!(self, arg, out, num_mut, arg.pre_inc(), *out = arg.post_inc());
     }
 
     fn inc_v(&mut self, arg: ValueReg, out: ValueReg) {
+        firestorm::profile_method!("inc_v");
         unop!(self, arg, out, val_mut, arg.pre_inc(), arg.post_inc(out));
     }
 
     fn dec_s(&mut self, arg: StringReg, out: StringReg) -> Option<()> {
+        firestorm::profile_method!("dec_s");
         unop!(self, arg, out, str_mut, arg.pre_dec().ok()?, arg.post_dec_s(out).ok()?);
         Some(())
     }
 
     fn dec_n(&mut self, arg: NumberReg, out: NumberReg) {
+        firestorm::profile_method!("dec_n");
         unop!(self, arg, out, num_mut, arg.pre_dec(), *out = arg.post_dec());
     }
 
     fn dec_v(&mut self, arg: ValueReg, out: ValueReg) -> Option<()> {
+        firestorm::profile_method!("dec_v");
         unop!(self, arg, out, val_mut, arg.pre_dec().ok()?, arg.post_dec(out).ok()?);
         Some(())
     }
 
     fn mul(&mut self, arg1: NumberReg, arg2: NumberReg, out: NumberReg) {
+        firestorm::profile_method!("mul");
         binop!(self, arg1, arg2, out, num_mut,
             *arg1 *= *arg1,
             *arg1 *= *arg2,
@@ -475,6 +496,7 @@ impl VMExec {
     }
 
     fn div(&mut self, arg1: NumberReg, arg2: NumberReg, out: NumberReg) -> Option<()> {
+        firestorm::profile_method!("div");
         binop!(self, arg1, arg2, out, num_mut,
             arg1.div_assign(arg1.clone()).ok()?,
             arg1.div_assign(arg2.clone()).ok()?,
@@ -485,6 +507,7 @@ impl VMExec {
     }
 
     fn mod_instr(&mut self, arg1: NumberReg, arg2: NumberReg, out: NumberReg) -> Option<()> {
+        firestorm::profile_method!("mod");
         binop!(self, arg1, arg2, out, num_mut,
             arg1.rem_assign(arg1.clone()).ok()?,
             arg1.rem_assign(arg2.clone()).ok()?,
@@ -495,6 +518,7 @@ impl VMExec {
     }
 
     fn pow(&mut self, arg1: NumberReg, arg2: NumberReg, out: NumberReg) {
+        firestorm::profile_method!("pow");
         binop!(self, arg1, arg2, out, num_mut,
             arg1.pow_assign(arg1.clone()),
             arg1.pow_assign(arg2.clone()),
@@ -504,50 +528,62 @@ impl VMExec {
     }
 
     fn abs(&mut self, arg: NumberReg, out: NumberReg) {
+        firestorm::profile_method!("abs");
         unop_num!(self, arg, out, arg.abs());
     }
 
     fn fact(&mut self, arg: NumberReg, out: NumberReg) {
+        firestorm::profile_method!("fact");
         unop_num!(self, arg, out, arg.fact());
     }
 
     fn sqrt(&mut self, arg: NumberReg, out: NumberReg) {
+        firestorm::profile_method!("sqrt");
         unop_num!(self, arg, out, arg.sqrt());
     }
 
     fn sin(&mut self, arg: NumberReg, out: NumberReg) {
+        firestorm::profile_method!("sin");
         unop_num!(self, arg, out, arg.sin());
     }
 
     fn cos(&mut self, arg: NumberReg, out: NumberReg) {
+        firestorm::profile_method!("cos");
         unop_num!(self, arg, out, arg.cos());
     }
 
     fn tan(&mut self, arg: NumberReg, out: NumberReg) {
+        firestorm::profile_method!("tan");
         unop_num!(self, arg, out, arg.tan());
     }
 
     fn asin(&mut self, arg: NumberReg, out: NumberReg) {
+        firestorm::profile_method!("asin");
         unop_num!(self, arg, out, arg.asin());
     }
 
     fn acos(&mut self, arg: NumberReg, out: NumberReg) {
+        firestorm::profile_method!("acos");
         unop_num!(self, arg, out, arg.acos());
     }
 
     fn atan(&mut self, arg: NumberReg, out: NumberReg) {
+        firestorm::profile_method!("atan");
         unop_num!(self, arg, out, arg.atan());
     }
 
     fn neg(&mut self, arg: NumberReg, out: NumberReg) {
+        firestorm::profile_method!("neg");
         unop_num!(self, arg, out, -arg);
     }
 
     fn not(&mut self, arg: NumberReg, out: NumberReg) {
+        firestorm::profile_method!("not");
         unop_num!(self, arg, out, !arg);
     }
 
     fn and(&mut self, arg1: NumberReg, arg2: NumberReg, out: NumberReg) {
+        firestorm::profile_method!("and");
         let arg1 = unsafe { self.num_ref(arg1).as_bool() };
         let arg2 = unsafe { self.num_ref(arg2).as_bool() };
         *unsafe { self.num_mut(out) } = (arg1 && arg2).into();
@@ -555,6 +591,7 @@ impl VMExec {
     }
 
     fn or(&mut self, arg1: NumberReg, arg2: NumberReg, out: NumberReg) {
+        firestorm::profile_method!("or");
         let arg1 = unsafe { self.num_ref(arg1).as_bool() };
         let arg2 = unsafe { self.num_ref(arg2).as_bool() };
         *unsafe { self.num_mut(out) } = (arg1 || arg2).into();
@@ -562,28 +599,34 @@ impl VMExec {
     }
 
     fn eq(&mut self, arg1: ValueReg, arg2: ValueReg, out: NumberReg) {
+        firestorm::profile_method!("eq");
         cmp!(self, arg1, arg2, out, true, arg1 == arg2);
     }
 
     fn le(&mut self, arg1: ValueReg, arg2: ValueReg, out: NumberReg) {
+        firestorm::profile_method!("le");
         cmp!( self, arg1, arg2, out, true, arg1.le(arg2, unsafe { self.get_buffer() }));
     }
 
     fn lt(&mut self, arg1: ValueReg, arg2: ValueReg, out: NumberReg) {
+        firestorm::profile_method!("lt");
         cmp!( self, arg1, arg2, out, false, arg1.lt(arg2, unsafe { self.get_buffer() }));
     }
 
     fn bool_n(&mut self, arg: NumberReg, out: NumberReg) {
+        firestorm::profile_method!("bool_n");
         unop_num!(self, arg, out, arg.as_bool().into());
     }
 
     fn bool_v(&mut self, arg: ValueReg, out: NumberReg) {
+        firestorm::profile_method!("bool_v");
         let result = unsafe { self.val_ref(arg).as_bool() };
         *unsafe { self.num_mut(out) } = result.into();
         self.set_next_instr();
     }
 
     fn step_aux(&mut self) -> Option<bool> {
+        firestorm::profile_method!("step_aux");
         match self.code[self.next_instr] {
             Instr::LineStart(line) => self.line_start(line),
             Instr::JumpRel { amount, condition } => self.jump_rel(amount, condition),
@@ -644,6 +687,7 @@ impl VMExec {
     }
 
     pub fn step(&mut self) {
+        firestorm::profile_method!("step");
         loop {
             match self.step_aux() {
                 Some(true) => return,

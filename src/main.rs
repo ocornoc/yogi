@@ -54,23 +54,40 @@ fn script() -> parser::raw::Script {
     script
 }
 
-fn main() {
+
+fn fs_main() {
+    const NUM_LINES: usize = 10_000;
     let script = script();
     let script: parser::cst::Script = script.try_into().unwrap();
     let script: parser::pre_ast::Script = script.try_into().unwrap();
     let script: parser::ast::Script = script.try_into().unwrap();
     let mut vm = vm::VMExec::from(script);
-    const NUM_LINES: usize = 1_000_000;
-    let start = Instant::now();
     for _ in 0..NUM_LINES {
         vm.step();
     }
-    let done = Instant::now();
-    let time_taken = (done - start).as_secs_f32();
-    let lines_per_sec = NUM_LINES as f32 / time_taken;
-    println!("finished execution in {}s at a rate of {} lines/sec.", time_taken, lines_per_sec);
-    println!("Globals:");
-    for (name, val) in vm.globals() {
-        println!(":{} = {}", name, val);
+}
+
+fn main() {
+    if firestorm::enabled() {
+        firestorm::bench("./flames/", fs_main).unwrap();
+    } else {
+        const NUM_LINES: usize = 1_000_000;
+        let script = script();
+        let script: parser::cst::Script = script.try_into().unwrap();
+        let script: parser::pre_ast::Script = script.try_into().unwrap();
+        let script: parser::ast::Script = script.try_into().unwrap();
+        let mut vm = vm::VMExec::from(script);
+        let start = Instant::now();
+        for _ in 0..NUM_LINES {
+            vm.step();
+        }
+        let done = Instant::now();
+        let time_taken = (done - start).as_secs_f32();
+        let lines_per_sec = NUM_LINES as f32 / time_taken;
+        println!("finished execution in {}s at a rate of {} lines/sec.", time_taken, lines_per_sec);
+        println!("Globals:");
+        for (name, val) in vm.globals() {
+            println!(":{} = {}", name, val);
+        }
     }
 }
