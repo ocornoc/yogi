@@ -310,8 +310,8 @@ fn parse_expr_aux(frags: &mut Vec<Fragment>, prec: Precedence) -> ParseResult<Ex
                 frags.pop();
                 break;
             },
-            Fragment::Assign(_) | Fragment::Goto | Fragment::If | Fragment::LeftParen =>
-                Err(ParseErr::ExpectedExpr)?,
+            Fragment::Goto | Fragment::If => break,
+            Fragment::Assign(_) | Fragment::LeftParen => Err(ParseErr::ExpectedExpr)?,
         }
     }
     Ok(buffer)
