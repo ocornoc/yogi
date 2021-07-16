@@ -19,7 +19,7 @@ pub struct Token {
 }
 
 #[derive(Debug, Default, Clone)]
-pub struct Line(pub ArrayVec<Token, LINE_LENGTH>);
+pub struct Line(pub Vec<Token>);
 
 #[derive(Debug, Default, Clone)]
 pub struct Script(pub [Line; NUM_LINES]);
@@ -70,8 +70,8 @@ impl TryFrom<raw::Line> for Line {
     type Error = ParseErr;
 
     fn try_from(value: raw::Line) -> Result<Self, Self::Error> {
-        let mut tokens = ArrayVec::new_const();
-        let mut remainder = value.0.as_ref();
+        let mut tokens = Vec::with_capacity(LINE_LENGTH);
+        let mut remainder = value.0.as_slice();
         let mut col = 0;
 
         while let &[c, ref r@..] = remainder {
