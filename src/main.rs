@@ -58,7 +58,6 @@ fn script() -> parser::raw::Script {
     script
 }
 
-
 fn fs_main() {
     const NUM_LINES: usize = 10_000;
     let script = script();
