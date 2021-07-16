@@ -58,7 +58,7 @@ impl VMExec {
                     condition: Some(cond),
                 };
                 self.code[e_len] = Instr::JumpRel {
-                    amount: t_len - e_len,
+                    amount: t_len - e_len + 1,
                     condition: None,
                 };
             }
@@ -71,11 +71,13 @@ impl VMExec {
                         let arg = out;
                         let out = self.new_num_reg(Number::ZERO);
                         self.code.push(Instr::MoveVN { arg, out });
+                        self.code.push(Instr::JumpErr);
                         out
                     },
                     AnyReg::Value(arg) => {
                         let out = self.new_num_reg(Number::ZERO);
                         self.code.push(Instr::MoveVN { arg, out });
+                        self.code.push(Instr::JumpErr);
                         out
                     },
                 };
