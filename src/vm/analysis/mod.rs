@@ -258,12 +258,15 @@ impl VMExec {
                     }
                     last_node = Some(node);
                 },
-                &Instr::JumpRel { amount, .. } => {
-                    if let Some(last_node) = last_node {
-                        graph.add_edge(last_node, node, ReachReason::Continue);
+                &Instr::JumpRel { amount, condition } => {
+                    if condition.is_some() {
+                        if let Some(last_node) = last_node {
+                            graph.add_edge(last_node, node, ReachReason::Continue);
+                        }
+                        last_node = Some(node);
                     }
+
                     jumps.push((node, loc + amount, true));
-                    last_node = Some(node);
                 },
                 Instr::JumpLine(_) => {
                     if let Some(last_node) = last_node {
@@ -294,7 +297,6 @@ impl VMExec {
             let root = graph.root.clone();
             graph.add_edge(last_node, root, ReachReason::LineEnd);
         }
-        // add 20->1
         (jumps, runtime_errs)
     }
 
