@@ -1,6 +1,6 @@
 use super::*;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum Value {
     Number(Number),
     Str(YString),
@@ -46,34 +46,6 @@ impl Value {
         } else {
             std::hint::unreachable_unchecked()
         }
-    }
-
-    fn both_number(&mut self, other: Self) -> ValueResult<(&mut Number, Number)> {
-        Err(RuntimeErr::Expected(ExpectedTy::Number, match (self, other) {
-            (Value::Number(l), Value::Number(r)) => {
-                return Ok((l, r));
-            },
-            (Value::Number(_), Value::Str(_)) => WrongArgType::Right,
-            (Value::Str(_), Value::Number(_)) => WrongArgType::Left,
-            (Value::Str(_), Value::Str(_)) => WrongArgType::Both,
-        }))
-    }
-
-    fn as_number(&self) -> ValueResult<&Number> {
-        match self {
-            Value::Number(n) => Ok(n),
-            Value::Str(_) => Err(RuntimeErr::Expected(ExpectedTy::Str, WrongArgType::Only)),
-        }
-    }
-
-    pub fn eq(&self, other: &Self, buffer: &mut YString) -> bool {
-        let (l, r) = match (self, other) {
-            (Value::Number(l), Value::Number(r)) => { return l == r; },
-            (Value::Number(l), Value::Str(r)) | (Value::Str(r), Value::Number(l)) =>
-                (l.stringify(buffer) as &_, r),
-            (Value::Str(l), Value::Str(r)) => (l, r),
-        };
-        l == r
     }
 
     pub fn le(&self, other: &Self, buffer: &mut YString) -> bool {
@@ -130,30 +102,6 @@ impl Value {
         }
     }
 
-    pub fn mul_assign(&mut self, other: Self) -> ValueResult<()> {
-        let (l, r) = self.both_number(other)?;
-        *l *= r;
-        Ok(())
-    }
-
-    pub fn div_assign(&mut self, other: Self) -> ValueResult<()> {
-        let (l, r) = self.both_number(other)?;
-        l.div_assign(r)?;
-        Ok(())
-    }
-
-    pub fn rem_assign(&mut self, other: Self) -> ValueResult<()> {
-        let (l, r) = self.both_number(other)?;
-        l.rem_assign(r)?;
-        Ok(())
-    }
-
-    pub fn pow_assign(&mut self, other: Self) -> ValueResult<()> {
-        let (l, r) = self.both_number(other)?;
-        l.pow_assign(r);
-        Ok(())
-    }
-
     pub fn pre_inc(&mut self) {
         match self {
             Value::Number(n) => n.pre_inc(),
@@ -207,36 +155,11 @@ impl Value {
         }
     }
 
-    pub fn abs(&self) -> ValueResult<Number> {
-        Ok(self.as_number()?.abs())
-    }
-
-    pub fn sqrt(&self) -> ValueResult<Number> {
-        Ok(self.as_number()?.sqrt())
-    }
-
-    pub fn sin(&self) -> ValueResult<Number> {
-        Ok(self.as_number()?.sin())
-    }
-
-    pub fn cos(&self) -> ValueResult<Number> {
-        Ok(self.as_number()?.cos())
-    }
-
-    pub fn tan(&self) -> ValueResult<Number> {
-        Ok(self.as_number()?.tan())
-    }
-
-    pub fn asin(&self) -> ValueResult<Number> {
-        Ok(self.as_number()?.asin())
-    }
-
-    pub fn acos(&self) -> ValueResult<Number> {
-        Ok(self.as_number()?.acos())
-    }
-
-    pub fn atan(&self) -> ValueResult<Number> {
-        Ok(self.as_number()?.atan())
+    pub fn as_bool(&self) -> bool {
+        match self {
+            Value::Number(n) => n.as_bool(),
+            Value::Str(_) => true,
+        }
     }
 }
 

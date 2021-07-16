@@ -28,27 +28,49 @@ type Line = u8;
 #[derive(Debug, Clone)]
 enum Instr {
     LineStart(Line),
-    JumpRel { amount: usize, condition: NumberReg },
+    JumpRel { amount: usize, condition: Option<NumberReg> },
     JumpLine(NumberReg),
     MoveSV { arg: StringReg, out: ValueReg },
     MoveNV { arg: NumberReg, out: ValueReg },
     MoveVV { arg: ValueReg, out: ValueReg },
-    MoveVS { arg: ValueReg, out: StringReg },
+    //MoveVS { arg: ValueReg, out: StringReg },
     MoveVN { arg: ValueReg, out: NumberReg },
-    StringifyN { arg: NumberReg, out: StringReg },
-    StringifyV { val: ValueReg, out: StringReg },
+    //StringifyN { arg: NumberReg, out: StringReg },
+    //StringifyV { val: ValueReg, out: StringReg },
     AddS { arg1: StringReg, arg2: StringReg, out: StringReg },
     AddN { arg1: NumberReg, arg2: NumberReg, out: NumberReg },
     AddV { arg1: ValueReg, arg2: ValueReg, out: ValueReg },
     SubS { arg1: StringReg, arg2: StringReg, out: StringReg },
     SubN { arg1: NumberReg, arg2: NumberReg, out: NumberReg },
     SubV { arg1: ValueReg, arg2: ValueReg, out: ValueReg },
+    Mul { arg1: NumberReg, arg2: NumberReg, out: NumberReg },
+    Div { arg1: NumberReg, arg2: NumberReg, out: NumberReg },
+    Mod { arg1: NumberReg, arg2: NumberReg, out: NumberReg },
+    Pow { arg1: NumberReg, arg2: NumberReg, out: NumberReg },
+    Eq { arg1: ValueReg, arg2: ValueReg, out: NumberReg },
+    Le { arg1: ValueReg, arg2: ValueReg, out: NumberReg },
+    Lt { arg1: ValueReg, arg2: ValueReg, out: NumberReg },
     IncS { arg: StringReg, out: StringReg },
     IncN { arg: NumberReg, out: NumberReg },
     IncV { arg: ValueReg, out: ValueReg },
     DecS { arg: StringReg, out: StringReg },
     DecN { arg: NumberReg, out: NumberReg },
     DecV { arg: ValueReg, out: ValueReg },
+    Abs { arg: NumberReg, out: NumberReg },
+    Fact { arg: NumberReg, out: NumberReg },
+    Sqrt { arg: NumberReg, out: NumberReg },
+    Sin { arg: NumberReg, out: NumberReg },
+    Cos { arg: NumberReg, out: NumberReg },
+    Tan { arg: NumberReg, out: NumberReg },
+    Asin { arg: NumberReg, out: NumberReg },
+    Acos { arg: NumberReg, out: NumberReg },
+    Atan { arg: NumberReg, out: NumberReg },
+    Neg { arg: NumberReg, out: NumberReg },
+    And { arg1: NumberReg, arg2: NumberReg, out: NumberReg },
+    Or { arg1: NumberReg, arg2: NumberReg, out: NumberReg },
+    Not { arg: NumberReg, out: NumberReg },
+    BoolN { arg: NumberReg, out: NumberReg },
+    BoolV { arg: ValueReg, out: NumberReg },
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -74,56 +96,104 @@ impl AnyReg {
             AnyReg::Value(arg) => arg,
         }
     }
+
+    fn into_num(self, vm: &mut VMExec) -> NumberReg {
+        let arg = match self {
+            AnyReg::Number(arg) => return arg,
+            AnyReg::String(_) => self.into_val(vm),
+            AnyReg::Value(arg) => arg,
+        };
+        let out = vm.new_num_reg(Number::ZERO);
+        vm.code.push(Instr::MoveVN { arg, out });
+        out
+    }
+
+    fn into_bool(self, vm: &mut VMExec) -> NumberReg {
+        match self {
+            AnyReg::Number(arg) => {
+                let out = vm.new_num_reg(Number::ZERO);
+                vm.code.push(Instr::BoolN { arg, out });
+                out
+            },
+            AnyReg::String(_) => vm.new_num_reg(Number::ONE),
+            AnyReg::Value(arg) => {
+                let out = vm.new_num_reg(Number::ZERO);
+                vm.code.push(Instr::BoolV { arg, out });
+                out
+            },
+        }
+    }
 }
 
-macro_rules! inc_dec {
-    ($self:ident, $arg:ident, $out:ident, $f:ident, $e1:expr, $e2:expr $(, )?) => {
-        {
-            if $arg == $out {
-                // SAFE: only one mut ref is taken
-                let $arg = unsafe { $self.$f($arg) };
-                $e1
-            } else {
-                // SAFE: the two registers are different
-                let $arg = unsafe { $self.$f($arg) };
-                let $out = unsafe { $self.$f($out) };
-                $e2;
-            }
-            $self.set_next_instr();
+macro_rules! unop {
+    ($self:ident, $arg:ident, $out:ident, $f:ident, $e1:expr, $e2:expr $(, )?) => { {
+        if $arg == $out {
+            // SAFE: only one mut ref is taken
+            let $arg = unsafe { $self.$f($arg) };
+            $e1
+        } else {
+            // SAFE: the two registers are different
+            let $arg = unsafe { $self.$f($arg) };
+            let $out = unsafe { $self.$f($out) };
+            $e2;
         }
-    };
+        $self.set_next_instr();
+    } };
+}
+
+macro_rules! unop_num {
+    ($self:ident, $arg:ident, $out:ident, $e:expr $(, )?) => { {
+        // SAFE: only one ref is taken
+        let $arg = unsafe { $self.num_ref($arg) }.clone();
+        // SAFE: still only one ref: we no longer use the ref from above by cloning
+        *unsafe { $self.num_mut($out) } = $e;
+        $self.set_next_instr();
+    } };
 }
 
 macro_rules! binop {
     ($self:ident, $arg1:ident, $arg2:ident, $out:ident, $f:ident,
-        $e1:expr, $e2:expr, $e3:expr, $e4:expr $(, )?) => {
-        {
-            if $arg1 == $out {
-                if $arg1 == $arg2 {
-                    // SAFE: only one register taken
-                    let $arg1 = unsafe { $self.$f($arg1) };
-                    $e1
-                } else {
-                    // SAFE: the two registers are different
-                    let $arg1 = unsafe { $self.$f($arg1) };
-                    let $arg2 = unsafe { $self.$f($arg2) };
-                    $e2
-                }
-            } else if $arg1 == $arg2 {
+        $e1:expr, $e2:expr, $e3:expr, $e4:expr $(, )?) => { {
+        if $arg1 == $out {
+            if $arg1 == $arg2 {
+                // SAFE: only one register taken
+                let $arg1 = unsafe { $self.$f($arg1) };
+                $e1
+            } else {
                 // SAFE: the two registers are different
                 let $arg1 = unsafe { $self.$f($arg1) };
-                let $out = unsafe { $self.$f($out) };
-                $e3
-            } else {
-                // SAFE: the three registers are different
-                let $arg1 = unsafe { $self.$f($arg1) };
                 let $arg2 = unsafe { $self.$f($arg2) };
-                let $out = unsafe { $self.$f($out) };
-                $e4
+                $e2
             }
-            $self.set_next_instr();
+        } else if $arg1 == $arg2 {
+            // SAFE: the two registers are different
+            let $arg1 = unsafe { $self.$f($arg1) };
+            let $out = unsafe { $self.$f($out) };
+            $e3
+        } else {
+            // SAFE: the three registers are different
+            let $arg1 = unsafe { $self.$f($arg1) };
+            let $arg2 = unsafe { $self.$f($arg2) };
+            let $out = unsafe { $self.$f($out) };
+            $e4
         }
-    };
+        $self.set_next_instr();
+    } };
+}
+
+macro_rules! cmp {
+    ($self:ident, $arg1:ident, $arg2:ident, $out:ident, $e1:expr, $e2:expr $(, )?) => { {
+        let result = if $arg1 == $arg2 {
+            $e1
+        } else {
+            // SAFE: the two registers are different
+            let $arg1 = unsafe { $self.val_ref($arg1) };
+            let $arg2 = unsafe { $self.val_ref($arg2) };
+            $e2
+        };
+        // SAFE: mut ref taken only after all other refs have been used
+        *unsafe { $self.num_mut($out) } = result.into();
+    } };
 }
 
 #[derive(Debug, Default)]
@@ -247,11 +317,14 @@ impl VMExec {
                 self.line_stats[line as usize] += 1;
                 self.set_next_instr();
             },
-            Instr::JumpRel { amount, condition } =>
+            Instr::JumpRel { amount, condition: Some(condition) } =>
                 // SAFE: only one ref taken
                 if unsafe { self.num_mut(condition).as_bool() } {
                     self.next_instr += amount;
                 },
+            Instr::JumpRel { amount, condition: None } => {
+                self.next_instr += amount;
+            },
             Instr::JumpLine(reg) => {
                 // SAFE: only one ref taken
                 let result = unsafe { self.num_mut(reg).as_f32() };
@@ -275,8 +348,17 @@ impl VMExec {
                 *self.val_mut(out) = Value::Number(*self.num_mut(arg));
                 self.set_next_instr();
             },
-            Instr::MoveVV { arg, out } => todo!(),
-            Instr::MoveVS { arg, out } => todo!(),
+            Instr::MoveVV { arg, out } => if arg != out {
+                // SAFE: all registers are guaranteed not to alias
+                unsafe { self.val_mut(out).clone_from(self.val_mut(arg)) };
+            },
+            /*// SAFE: all registers are guaranteed not to alias
+            Instr::MoveVS { arg, out } => if let Value::Str(s) = unsafe { self.val_mut(arg) } {
+                unsafe { self.str_mut(out).clone_from(s) };
+                self.set_next_instr();
+            } else {
+                return None;
+            },*/
             // SAFE: all registers are guaranteed not to alias
             Instr::MoveVN { arg, out } => if let Value::Number(n) = unsafe { self.val_mut(arg) } {
                 unsafe { *self.num_mut(out) = *n };
@@ -284,8 +366,8 @@ impl VMExec {
             } else {
                 return None;
             },
-            Instr::StringifyN { arg, out } => todo!(),
-            Instr::StringifyV { val, out } => todo!(),
+            //Instr::StringifyN { arg, out } => todo!(),
+            //Instr::StringifyV { val, out } => todo!(),
             Instr::AddS { arg1, arg2, out } => binop!(self, arg1, arg2, out, str_mut,
                 *arg1 = YString(arg1.repeat(2)),
                 *arg1 += arg2,
@@ -307,21 +389,117 @@ impl VMExec {
                 { out.clone_from(arg1); out.add_assign(arg1, unsafe { self.get_buffer() }) },
                 { out.clone_from(arg1); out.add_assign(arg2, unsafe { self.get_buffer() }) },
             ),
-            Instr::SubS { arg1, arg2, out } => todo!(),
-            Instr::SubN { arg1, arg2, out } => todo!(),
-            Instr::SubV { arg1, arg2, out } => todo!(),
+            Instr::SubS { arg1, arg2, out } => binop!(self, arg1, arg2, out, str_mut,
+                *arg1 -= {
+                    let buffer = unsafe { self.get_buffer() };
+                    buffer.clone_from(arg1);
+                    buffer
+                },
+                *arg1 -= arg2,
+                { out.clone_from(arg1); *out -= arg1 },
+                { out.clone_from(arg1); *out -= arg2 },
+            ),
+            Instr::SubN { arg1, arg2, out } => binop!(self, arg1, arg2, out, num_mut,
+                *arg1 -= *arg1,
+                *arg1 -= *arg2,
+                *out = *arg1 - *arg1,
+                *out = *arg1 - *arg2,
+            ),
+            Instr::SubV { arg1, arg2, out } => binop!(self, arg1, arg2, out, val_mut,
+                match arg1 {
+                    Value::Number(n) => *n -= *n,
+                    Value::Str(s) => *s -= {
+                        let buffer = unsafe { self.get_buffer() };
+                        buffer.clone_from(s);
+                        buffer
+                    },
+                },
+                arg1.sub_assign(arg2, unsafe { self.get_buffer() }),
+                { out.clone_from(arg1); out.sub_assign(arg1, unsafe { self.get_buffer() }) },
+                { out.clone_from(arg1); out.sub_assign(arg2, unsafe { self.get_buffer() }) },
+            ),
             Instr::IncS { arg, out } => 
-                inc_dec!(self, arg, out, str_mut, arg.pre_inc(), arg.post_inc_s(out)),
+                unop!(self, arg, out, str_mut, arg.pre_inc(), arg.post_inc_s(out)),
             Instr::IncN { arg, out } =>
-                inc_dec!(self, arg, out, num_mut, arg.pre_inc(), *out = arg.post_inc()),
+                unop!(self, arg, out, num_mut, arg.pre_inc(), *out = arg.post_inc()),
             Instr::IncV { arg, out } =>
-                inc_dec!(self, arg, out, val_mut, arg.pre_inc(), arg.post_inc(out)),
+                unop!(self, arg, out, val_mut, arg.pre_inc(), arg.post_inc(out)),
             Instr::DecS { arg, out } =>
-                inc_dec!(self, arg, out, str_mut, arg.pre_dec().ok()?, arg.post_dec_s(out).ok()?),
+                unop!(self, arg, out, str_mut, arg.pre_dec().ok()?, arg.post_dec_s(out).ok()?),
             Instr::DecN { arg, out } =>
-                inc_dec!(self, arg, out, num_mut, arg.pre_dec(), *out = arg.post_dec()),
+                unop!(self, arg, out, num_mut, arg.pre_dec(), *out = arg.post_dec()),
             Instr::DecV { arg, out } =>
-                inc_dec!(self, arg, out, val_mut, arg.pre_dec().ok()?, arg.post_dec(out).ok()?),
+                unop!(self, arg, out, val_mut, arg.pre_dec().ok()?, arg.post_dec(out).ok()?),
+            Instr::Mul { arg1, arg2, out } => binop!(self, arg1, arg2, out, num_mut,
+                *arg1 *= *arg1,
+                *arg1 *= *arg2,
+                *out = *arg1 * *arg1,
+                *out = *arg1 * *arg2,
+            ),
+            Instr::Div { arg1, arg2, out } => binop!(self, arg1, arg2, out, num_mut,
+                arg1.div_assign(arg1.clone()).ok()?,
+                arg1.div_assign(arg2.clone()).ok()?,
+                *out = (*arg1 / *arg1).ok()?,
+                *out = (*arg1 / *arg2).ok()?,
+            ),
+            Instr::Mod { arg1, arg2, out } => binop!(self, arg1, arg2, out, num_mut,
+                arg1.rem_assign(arg1.clone()).ok()?,
+                arg1.rem_assign(arg2.clone()).ok()?,
+                *out = (*arg1 % *arg1).ok()?,
+                *out = (*arg1 % *arg2).ok()?,
+            ),
+            Instr::Pow { arg1, arg2, out } => binop!(self, arg1, arg2, out, num_mut,
+                arg1.pow_assign(arg1.clone()),
+                arg1.pow_assign(arg2.clone()),
+                *out = *arg1 * *arg1,
+                *out = *arg1 * *arg2,
+            ),
+            Instr::Abs { arg, out } => unop_num!(self, arg, out, arg.abs()),
+            Instr::Fact { arg, out } => unop_num!(self, arg, out, arg.fact()),
+            Instr::Sqrt { arg, out } => unop_num!(self, arg, out, arg.sqrt()),
+            Instr::Sin { arg, out } => unop_num!(self, arg, out, arg.sin()),
+            Instr::Cos { arg, out } => unop_num!(self, arg, out, arg.cos()),
+            Instr::Tan { arg, out } => unop_num!(self, arg, out, arg.tan()),
+            Instr::Asin { arg, out } => unop_num!(self, arg, out, arg.asin()),
+            Instr::Acos { arg, out } => unop_num!(self, arg, out, arg.acos()),
+            Instr::Atan { arg, out } => unop_num!(self, arg, out, arg.atan()),
+            Instr::Neg { arg, out } => unop_num!(self, arg, out, -arg),
+            Instr::Not { arg, out } => unop_num!(self, arg, out, !arg),
+            Instr::And { arg1, arg2, out } => {
+                let arg1 = unsafe { self.num_ref(arg1).as_bool() };
+                let arg2 = unsafe { self.num_ref(arg2).as_bool() };
+                *unsafe { self.num_mut(out) } = (arg1 && arg2).into();
+                self.set_next_instr();
+            },
+            Instr::Or { arg1, arg2, out } => {
+                let arg1 = unsafe { self.num_ref(arg1).as_bool() };
+                let arg2 = unsafe { self.num_ref(arg2).as_bool() };
+                *unsafe { self.num_mut(out) } = (arg1 || arg2).into();
+                self.set_next_instr();
+            },
+            Instr::Eq { arg1, arg2, out } => cmp!(self, arg1, arg2, out, true, arg1 == arg2),
+            Instr::Le { arg1, arg2, out } => cmp!(
+                self,
+                arg1,
+                arg2,
+                out,
+                true,
+                arg1.le(arg2, unsafe { self.get_buffer() }),
+            ),
+            Instr::Lt { arg1, arg2, out } => cmp!(
+                self,
+                arg1,
+                arg2,
+                out,
+                false,
+                arg1.lt(arg2, unsafe { self.get_buffer() }),
+            ),
+            Instr::BoolN { arg, out } => unop_num!(self, arg, out, arg.as_bool().into()),
+            Instr::BoolV { arg, out } => {
+                let result = unsafe { self.val_ref(arg).as_bool() };
+                *unsafe { self.num_mut(out) } = result.into();
+                self.set_next_instr();
+            },
         };
         Some(false)
     }

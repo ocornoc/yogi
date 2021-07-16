@@ -151,28 +151,96 @@ fn expression_codegen(vm: &mut VMExec, data: &mut CodegenData, expr: Expr) -> An
                 AnyReg::Value(out)
             },
         },
-        Expr::Unop(_, _) => todo!(),
-        Expr::Binop(l, binop, r) => {
+        Expr::Unop(Unop::Not, expr) => {
+            let arg = expression_codegen(vm, data, *expr).into_bool(vm);
+            let out = vm.new_num_reg(Number::ZERO);
+            vm.code.push(Instr::Not { arg, out });
+            AnyReg::Number(out)
+        },
+        Expr::Unop(unop, expr) => {
+            let arg = expression_codegen(vm, data, *expr).into_num(vm);
+            let out = vm.new_num_reg(Number::ZERO);
+            vm.code.push(match unop {
+                Unop::Abs => Instr::Abs { arg, out },
+                Unop::Sqrt => Instr::Sqrt { arg, out },
+                Unop::Sin => Instr::Sin { arg, out },
+                Unop::Cos => Instr::Cos { arg, out },
+                Unop::Tan => Instr::Tan { arg, out },
+                Unop::Asin => Instr::Asin { arg, out },
+                Unop::Acos => Instr::Acos { arg, out },
+                Unop::Atan => Instr::Atan { arg, out },
+                Unop::Fact => Instr::Fact { arg, out },
+                Unop::Neg => Instr::Neg { arg, out },
+                Unop::Not => unsafe { unreachable() },
+            });
+            AnyReg::Number(out)
+        },
+        Expr::Binop(l, binop@(Binop::Add | Binop::Sub), r) => {
             let arg1 = expression_codegen(vm, data, *r).into_val(vm);
             let arg2 = expression_codegen(vm, data, *l).into_val(vm);
             let out = vm.new_val_reg(Value::default());
-            vm.code.push(match binop {
-                Binop::Add => Instr::AddV { arg1, arg2, out },
-                Binop::Sub => Instr::SubV { arg1, arg2, out },
-                Binop::Mul => todo!(),
-                Binop::Div => todo!(),
-                Binop::Mod => todo!(),
-                Binop::Pow => todo!(),
-                Binop::Lt => todo!(),
-                Binop::Le => todo!(),
-                Binop::Eq => todo!(),
-                Binop::Ge => todo!(),
-                Binop::Gt => todo!(),
-                Binop::Ne => todo!(),
-                Binop::And => todo!(),
-                Binop::Or => todo!(),
-            });
+            match binop {
+                Binop::Add => vm.code.push(Instr::AddV { arg1, arg2, out }),
+                Binop::Sub => vm.code.push(Instr::SubV { arg1, arg2, out }),
+                _ => unsafe { unreachable() },
+            }
             AnyReg::Value(out)
         },
+        Expr::Binop(
+            l,
+            binop@(Binop::Eq | Binop::Ne | Binop::Le | Binop::Lt | Binop::Ge | Binop::Gt),
+            r,
+        ) => {
+            let arg1 = expression_codegen(vm, data, *r).into_val(vm);
+            let arg2 = expression_codegen(vm, data, *l).into_val(vm);
+            let mut out = vm.new_num_reg(Number::ZERO);
+            vm.code.push(match binop {
+                Binop::Eq | Binop::Ne => Instr::Eq { arg1, arg2, out },
+                Binop::Le => Instr::Le { arg1, arg2, out },
+                Binop::Lt => Instr::Lt { arg1, arg2, out },
+                Binop::Ge => Instr::Le { arg1: arg2, arg2: arg1, out },
+                Binop::Gt => Instr::Lt { arg1: arg2, arg2: arg1, out },
+                _ => unsafe { unreachable() },
+            });
+            if binop == Binop::Ne {
+                let new_out = vm.new_num_reg(Number::ZERO);
+                vm.code.push(Instr::Not { arg: out, out: new_out });
+                out = new_out;
+            }
+            AnyReg::Number(out)
+        },
+        Expr::Binop(l, binop@(Binop::And | Binop::Or), r) => {
+            let arg1 = expression_codegen(vm, data, *r).into_bool(vm);
+            let arg2 = expression_codegen(vm, data, *l).into_bool(vm);
+            let out = vm.new_num_reg(Number::ZERO);
+            vm.code.push(match binop {
+                Binop::And => Instr::And { arg1, arg2, out },
+                Binop::Or => Instr::Or { arg1, arg2, out },
+                _ => unsafe { unreachable() },
+            });
+            AnyReg::Number(out)
+        },
+        Expr::Binop(l, binop@(Binop::Mul | Binop::Div | Binop::Mod | Binop::Pow), r) => {
+            let arg1 = expression_codegen(vm, data, *r).into_num(vm);
+            let arg2 = expression_codegen(vm, data, *l).into_num(vm);
+            let out = vm.new_num_reg(Number::ZERO);
+            vm.code.push(match binop {
+                Binop::Mul => Instr::Mul { arg1, arg2, out },
+                Binop::Div => Instr::Div { arg1, arg2, out },
+                Binop::Mod => Instr::Mod { arg1, arg2, out },
+                Binop::Pow => Instr::Pow { arg1, arg2, out },
+                _ => unsafe { unreachable() },
+            });
+            AnyReg::Number(out)
+        },
+    }
+}
+
+#[cold]
+unsafe fn unreachable() -> ! {
+    if cfg!(debug_assertions) {
+        unreachable!()
+    } else {
+        std::hint::unreachable_unchecked()
     }
 }

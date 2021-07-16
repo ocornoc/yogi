@@ -152,6 +152,22 @@ impl Number {
     pub fn atan(self) -> Self {
         Number::new_f32(self.as_f32().atan().to_degrees())
     }
+
+    pub fn fact(self) -> Self {
+        if self.0.is_negative() {
+            Number::MIN
+        } else {
+            let mut v = self.0 / Number::SCALE;
+            let mut i = 0;
+            let mut result = 1_i64;
+            while v.is_positive() {
+                i += 1;
+                v -= 1;
+                result = result.wrapping_mul(i);
+            }
+            Number(result.wrapping_mul(Number::SCALE))
+        }
+    }
 }
 
 impl From<bool> for Number {
