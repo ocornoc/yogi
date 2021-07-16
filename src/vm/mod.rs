@@ -135,7 +135,7 @@ macro_rules! unop {
             // SAFE: the two registers are different
             let $arg = unsafe { $self.$f($arg) };
             let $out = unsafe { $self.$f($out) };
-            $e2;
+            $e2
         }
         $self.set_next_instr();
     } };
@@ -311,49 +311,289 @@ impl VMExec {
         &mut *self.string_buffer.get()
     }
 
+    fn line_start(&mut self, line: Line) {
+        self.cur_line = line;
+        self.line_stats[line as usize] += 1;
+        self.set_next_instr();
+    }
+
+    fn jump_rel(&mut self, amount: usize, condition: Option<NumberReg>) {
+        if let Some(condition) = condition {
+            // SAFE: only one ref taken
+            if unsafe { self.num_mut(condition).as_bool() } {
+                self.next_instr += amount;
+            }
+        } else {
+            self.next_instr += amount;
+        }
+    }
+
+    fn jump_line(&mut self, reg: NumberReg) {
+        // SAFE: only one ref taken
+        let result = unsafe { self.num_mut(reg).as_f32() };
+        let next_line = (result.floor() as usize).clamp(1, NUM_LINES) - 1;
+        self.set_next_line(next_line);
+    }
+
+    fn move_sv(&mut self, arg: StringReg, out: ValueReg) {
+        // SAFE: all registers are guaranteed not to alias
+        let s = unsafe { self.str_mut(arg) };
+        let value = unsafe { self.val_mut(out) };
+        if let Value::Str(old) = value {
+            old.clone_from(s);
+        } else {
+            *value = Value::Str(s.clone());
+        }
+        self.set_next_instr();
+    }
+
+    fn move_nv(&mut self, arg: NumberReg, out: ValueReg) {
+        // SAFE: all registers are guaranteed not to alias
+        *unsafe { self.val_mut(out) } = Value::Number(*unsafe { self.num_mut(arg) });
+        self.set_next_instr();
+    }
+
+    fn move_vv(&mut self, arg: ValueReg, out: ValueReg) {
+        if arg != out {
+            // SAFE: all registers are guaranteed not to alias
+            unsafe { self.val_mut(out).clone_from(self.val_mut(arg)) };
+            self.set_next_instr();
+        }
+    }
+
+    fn move_vn(&mut self, arg: ValueReg, out: NumberReg) -> Option<()>  {
+        if let Value::Number(n) = unsafe { self.val_mut(arg) } {
+            unsafe { *self.num_mut(out) = *n };
+            self.set_next_instr();
+            Some(())
+        } else {
+            None
+        }
+    }
+
+    fn add_s(&mut self, arg1: StringReg, arg2: StringReg, out: StringReg) {
+        binop!(self, arg1, arg2, out, str_mut,
+            *arg1 = YString(arg1.repeat(2)),
+            *arg1 += arg2,
+            { out.clone_from(arg1); *out += arg1 },
+            { out.clone_from(arg1); *out += arg2 },
+        );
+    }
+
+    fn add_n(&mut self, arg1: NumberReg, arg2: NumberReg, out: NumberReg) {
+        binop!(self, arg1, arg2, out, num_mut,
+            *arg1 += *arg1,
+            *arg1 += *arg2,
+            *out = *arg1 + *arg1,
+            *out = *arg1 + *arg2,
+        );
+    }
+
+    fn add_v(&mut self, arg1: ValueReg, arg2: ValueReg, out: ValueReg) {
+        binop!(self, arg1, arg2, out, val_mut,
+            match arg1 {
+                Value::Number(n) => *n += *n,
+                Value::Str(s) => *s = YString(s.repeat(2)),
+            },
+            arg1.add_assign(arg2, unsafe { self.get_buffer() }),
+            { out.clone_from(arg1); out.add_assign(arg1, unsafe { self.get_buffer() }) },
+            { out.clone_from(arg1); out.add_assign(arg2, unsafe { self.get_buffer() }) },
+        );
+    }
+
+    fn sub_s(&mut self, arg1: StringReg, arg2: StringReg, out: StringReg) {
+        binop!(self, arg1, arg2, out, str_mut,
+            *arg1 -= {
+                let buffer = unsafe { self.get_buffer() };
+                buffer.clone_from(arg1);
+                buffer
+            },
+            *arg1 -= arg2,
+            { out.clone_from(arg1); *out -= arg1 },
+            { out.clone_from(arg1); *out -= arg2 },
+        );
+    }
+
+    fn sub_n(&mut self, arg1: NumberReg, arg2: NumberReg, out: NumberReg) {
+        binop!(self, arg1, arg2, out, num_mut,
+            *arg1 -= *arg1,
+            *arg1 -= *arg2,
+            *out = *arg1 - *arg1,
+            *out = *arg1 - *arg2,
+        );
+    }
+
+    fn sub_v(&mut self, arg1: ValueReg, arg2: ValueReg, out: ValueReg) {
+        binop!(self, arg1, arg2, out, val_mut,
+            match arg1 {
+                Value::Number(n) => *n -= *n,
+                Value::Str(s) => *s -= {
+                    let buffer = unsafe { self.get_buffer() };
+                    buffer.clone_from(s);
+                    buffer
+                },
+            },
+            arg1.sub_assign(arg2, unsafe { self.get_buffer() }),
+            { out.clone_from(arg1); out.sub_assign(arg1, unsafe { self.get_buffer() }) },
+            { out.clone_from(arg1); out.sub_assign(arg2, unsafe { self.get_buffer() }) },
+        );
+    }
+
+    fn inc_s(&mut self, arg: StringReg, out: StringReg) {
+        unop!(self, arg, out, str_mut, arg.pre_inc(), arg.post_inc_s(out));
+    }
+
+    fn inc_n(&mut self, arg: NumberReg, out: NumberReg) {
+        unop!(self, arg, out, num_mut, arg.pre_inc(), *out = arg.post_inc());
+    }
+
+    fn inc_v(&mut self, arg: ValueReg, out: ValueReg) {
+        unop!(self, arg, out, val_mut, arg.pre_inc(), arg.post_inc(out));
+    }
+
+    fn dec_s(&mut self, arg: StringReg, out: StringReg) -> Option<()> {
+        unop!(self, arg, out, str_mut, arg.pre_dec().ok()?, arg.post_dec_s(out).ok()?);
+        Some(())
+    }
+
+    fn dec_n(&mut self, arg: NumberReg, out: NumberReg) {
+        unop!(self, arg, out, num_mut, arg.pre_dec(), *out = arg.post_dec());
+    }
+
+    fn dec_v(&mut self, arg: ValueReg, out: ValueReg) -> Option<()> {
+        unop!(self, arg, out, val_mut, arg.pre_dec().ok()?, arg.post_dec(out).ok()?);
+        Some(())
+    }
+
+    fn mul(&mut self, arg1: NumberReg, arg2: NumberReg, out: NumberReg) {
+        binop!(self, arg1, arg2, out, num_mut,
+            *arg1 *= *arg1,
+            *arg1 *= *arg2,
+            *out = *arg1 * *arg1,
+            *out = *arg1 * *arg2,
+        )
+    }
+
+    fn div(&mut self, arg1: NumberReg, arg2: NumberReg, out: NumberReg) -> Option<()> {
+        binop!(self, arg1, arg2, out, num_mut,
+            arg1.div_assign(arg1.clone()).ok()?,
+            arg1.div_assign(arg2.clone()).ok()?,
+            *out = (*arg1 / *arg1).ok()?,
+            *out = (*arg1 / *arg2).ok()?,
+        );
+        Some(())
+    }
+
+    fn mod_instr(&mut self, arg1: NumberReg, arg2: NumberReg, out: NumberReg) -> Option<()> {
+        binop!(self, arg1, arg2, out, num_mut,
+            arg1.rem_assign(arg1.clone()).ok()?,
+            arg1.rem_assign(arg2.clone()).ok()?,
+            *out = (*arg1 % *arg1).ok()?,
+            *out = (*arg1 % *arg2).ok()?,
+        );
+        Some(())
+    }
+
+    fn pow(&mut self, arg1: NumberReg, arg2: NumberReg, out: NumberReg) {
+        binop!(self, arg1, arg2, out, num_mut,
+            arg1.pow_assign(arg1.clone()),
+            arg1.pow_assign(arg2.clone()),
+            *out = *arg1 * *arg1,
+            *out = *arg1 * *arg2,
+        );
+    }
+
+    fn abs(&mut self, arg: NumberReg, out: NumberReg) {
+        unop_num!(self, arg, out, arg.abs());
+    }
+
+    fn fact(&mut self, arg: NumberReg, out: NumberReg) {
+        unop_num!(self, arg, out, arg.fact());
+    }
+
+    fn sqrt(&mut self, arg: NumberReg, out: NumberReg) {
+        unop_num!(self, arg, out, arg.sqrt());
+    }
+
+    fn sin(&mut self, arg: NumberReg, out: NumberReg) {
+        unop_num!(self, arg, out, arg.sin());
+    }
+
+    fn cos(&mut self, arg: NumberReg, out: NumberReg) {
+        unop_num!(self, arg, out, arg.cos());
+    }
+
+    fn tan(&mut self, arg: NumberReg, out: NumberReg) {
+        unop_num!(self, arg, out, arg.tan());
+    }
+
+    fn asin(&mut self, arg: NumberReg, out: NumberReg) {
+        unop_num!(self, arg, out, arg.asin());
+    }
+
+    fn acos(&mut self, arg: NumberReg, out: NumberReg) {
+        unop_num!(self, arg, out, arg.acos());
+    }
+
+    fn atan(&mut self, arg: NumberReg, out: NumberReg) {
+        unop_num!(self, arg, out, arg.atan());
+    }
+
+    fn neg(&mut self, arg: NumberReg, out: NumberReg) {
+        unop_num!(self, arg, out, -arg);
+    }
+
+    fn not(&mut self, arg: NumberReg, out: NumberReg) {
+        unop_num!(self, arg, out, !arg);
+    }
+
+    fn and(&mut self, arg1: NumberReg, arg2: NumberReg, out: NumberReg) {
+        let arg1 = unsafe { self.num_ref(arg1).as_bool() };
+        let arg2 = unsafe { self.num_ref(arg2).as_bool() };
+        *unsafe { self.num_mut(out) } = (arg1 && arg2).into();
+        self.set_next_instr();
+    }
+
+    fn or(&mut self, arg1: NumberReg, arg2: NumberReg, out: NumberReg) {
+        let arg1 = unsafe { self.num_ref(arg1).as_bool() };
+        let arg2 = unsafe { self.num_ref(arg2).as_bool() };
+        *unsafe { self.num_mut(out) } = (arg1 || arg2).into();
+        self.set_next_instr();
+    }
+
+    fn eq(&mut self, arg1: ValueReg, arg2: ValueReg, out: NumberReg) {
+        cmp!(self, arg1, arg2, out, true, arg1 == arg2);
+    }
+
+    fn le(&mut self, arg1: ValueReg, arg2: ValueReg, out: NumberReg) {
+        cmp!( self, arg1, arg2, out, true, arg1.le(arg2, unsafe { self.get_buffer() }));
+    }
+
+    fn lt(&mut self, arg1: ValueReg, arg2: ValueReg, out: NumberReg) {
+        cmp!( self, arg1, arg2, out, false, arg1.lt(arg2, unsafe { self.get_buffer() }));
+    }
+
+    fn bool_n(&mut self, arg: NumberReg, out: NumberReg) {
+        unop_num!(self, arg, out, arg.as_bool().into());
+    }
+
+    fn bool_v(&mut self, arg: ValueReg, out: NumberReg) {
+        let result = unsafe { self.val_ref(arg).as_bool() };
+        *unsafe { self.num_mut(out) } = result.into();
+        self.set_next_instr();
+    }
+
     fn step_aux(&mut self) -> Option<bool> {
         match self.code[self.next_instr] {
-            Instr::LineStart(line) => {
-                self.cur_line = line;
-                self.line_stats[line as usize] += 1;
-                self.set_next_instr();
-            },
-            Instr::JumpRel { amount, condition: Some(condition) } =>
-                // SAFE: only one ref taken
-                if unsafe { self.num_mut(condition).as_bool() } {
-                    self.next_instr += amount;
-                },
-            Instr::JumpRel { amount, condition: None } => {
-                self.next_instr += amount;
-            },
+            Instr::LineStart(line) => self.line_start(line),
+            Instr::JumpRel { amount, condition } => self.jump_rel(amount, condition),
             Instr::JumpLine(reg) => {
-                // SAFE: only one ref taken
-                let result = unsafe { self.num_mut(reg).as_f32() };
-                let next_line = (result.floor() as usize).clamp(1, NUM_LINES) - 1;
-                self.set_next_line(next_line);
+                self.jump_line(reg);
                 return Some(true);
             },
-            // SAFE: all registers are guaranteed not to alias
-            Instr::MoveSV { arg, out } => unsafe {
-                let s = self.str_mut(arg);
-                let value = self.val_mut(out);
-                if let Value::Str(old) = value {
-                    old.clone_from(s);
-                } else {
-                    *value = Value::Str(s.clone());
-                }
-                self.set_next_instr();
-            },
-            // SAFE: all registers are guaranteed not to alias
-            Instr::MoveNV { arg, out } => unsafe {
-                *self.val_mut(out) = Value::Number(*self.num_mut(arg));
-                self.set_next_instr();
-            },
-            Instr::MoveVV { arg, out } => if arg != out {
-                // SAFE: all registers are guaranteed not to alias
-                unsafe { self.val_mut(out).clone_from(self.val_mut(arg)) };
-                self.set_next_instr();
-            },
+            Instr::MoveSV { arg, out } => self.move_sv(arg, out),
+            Instr::MoveNV { arg, out } => self.move_nv(arg, out),
+            Instr::MoveVV { arg, out } => self.move_vv(arg, out),
             /*// SAFE: all registers are guaranteed not to alias
             Instr::MoveVS { arg, out } => if let Value::Str(s) = unsafe { self.val_mut(arg) } {
                 unsafe { self.str_mut(out).clone_from(s) };
@@ -362,146 +602,43 @@ impl VMExec {
                 return None;
             },*/
             // SAFE: all registers are guaranteed not to alias
-            Instr::MoveVN { arg, out } => if let Value::Number(n) = unsafe { self.val_mut(arg) } {
-                unsafe { *self.num_mut(out) = *n };
-                self.set_next_instr();
-            } else {
-                return None;
-            },
+            Instr::MoveVN { arg, out } => self.move_vn(arg, out)?,
             //Instr::StringifyN { arg, out } => todo!(),
             //Instr::StringifyV { val, out } => todo!(),
-            Instr::AddS { arg1, arg2, out } => binop!(self, arg1, arg2, out, str_mut,
-                *arg1 = YString(arg1.repeat(2)),
-                *arg1 += arg2,
-                { out.clone_from(arg1); *out += arg1 },
-                { out.clone_from(arg1); *out += arg2 },
-            ),
-            Instr::AddN { arg1, arg2, out } => binop!(self, arg1, arg2, out, num_mut,
-                *arg1 += *arg1,
-                *arg1 += *arg2,
-                *out = *arg1 + *arg1,
-                *out = *arg1 + *arg2,
-            ),
-            Instr::AddV { arg1, arg2, out } => binop!(self, arg1, arg2, out, val_mut,
-                match arg1 {
-                    Value::Number(n) => *n += *n,
-                    Value::Str(s) => *s = YString(s.repeat(2)),
-                },
-                arg1.add_assign(arg2, unsafe { self.get_buffer() }),
-                { out.clone_from(arg1); out.add_assign(arg1, unsafe { self.get_buffer() }) },
-                { out.clone_from(arg1); out.add_assign(arg2, unsafe { self.get_buffer() }) },
-            ),
-            Instr::SubS { arg1, arg2, out } => binop!(self, arg1, arg2, out, str_mut,
-                *arg1 -= {
-                    let buffer = unsafe { self.get_buffer() };
-                    buffer.clone_from(arg1);
-                    buffer
-                },
-                *arg1 -= arg2,
-                { out.clone_from(arg1); *out -= arg1 },
-                { out.clone_from(arg1); *out -= arg2 },
-            ),
-            Instr::SubN { arg1, arg2, out } => binop!(self, arg1, arg2, out, num_mut,
-                *arg1 -= *arg1,
-                *arg1 -= *arg2,
-                *out = *arg1 - *arg1,
-                *out = *arg1 - *arg2,
-            ),
-            Instr::SubV { arg1, arg2, out } => binop!(self, arg1, arg2, out, val_mut,
-                match arg1 {
-                    Value::Number(n) => *n -= *n,
-                    Value::Str(s) => *s -= {
-                        let buffer = unsafe { self.get_buffer() };
-                        buffer.clone_from(s);
-                        buffer
-                    },
-                },
-                arg1.sub_assign(arg2, unsafe { self.get_buffer() }),
-                { out.clone_from(arg1); out.sub_assign(arg1, unsafe { self.get_buffer() }) },
-                { out.clone_from(arg1); out.sub_assign(arg2, unsafe { self.get_buffer() }) },
-            ),
-            Instr::IncS { arg, out } => 
-                unop!(self, arg, out, str_mut, arg.pre_inc(), arg.post_inc_s(out)),
-            Instr::IncN { arg, out } =>
-                unop!(self, arg, out, num_mut, arg.pre_inc(), *out = arg.post_inc()),
-            Instr::IncV { arg, out } =>
-                unop!(self, arg, out, val_mut, arg.pre_inc(), arg.post_inc(out)),
-            Instr::DecS { arg, out } =>
-                unop!(self, arg, out, str_mut, arg.pre_dec().ok()?, arg.post_dec_s(out).ok()?),
-            Instr::DecN { arg, out } =>
-                unop!(self, arg, out, num_mut, arg.pre_dec(), *out = arg.post_dec()),
-            Instr::DecV { arg, out } =>
-                unop!(self, arg, out, val_mut, arg.pre_dec().ok()?, arg.post_dec(out).ok()?),
-            Instr::Mul { arg1, arg2, out } => binop!(self, arg1, arg2, out, num_mut,
-                *arg1 *= *arg1,
-                *arg1 *= *arg2,
-                *out = *arg1 * *arg1,
-                *out = *arg1 * *arg2,
-            ),
-            Instr::Div { arg1, arg2, out } => binop!(self, arg1, arg2, out, num_mut,
-                arg1.div_assign(arg1.clone()).ok()?,
-                arg1.div_assign(arg2.clone()).ok()?,
-                *out = (*arg1 / *arg1).ok()?,
-                *out = (*arg1 / *arg2).ok()?,
-            ),
-            Instr::Mod { arg1, arg2, out } => binop!(self, arg1, arg2, out, num_mut,
-                arg1.rem_assign(arg1.clone()).ok()?,
-                arg1.rem_assign(arg2.clone()).ok()?,
-                *out = (*arg1 % *arg1).ok()?,
-                *out = (*arg1 % *arg2).ok()?,
-            ),
-            Instr::Pow { arg1, arg2, out } => binop!(self, arg1, arg2, out, num_mut,
-                arg1.pow_assign(arg1.clone()),
-                arg1.pow_assign(arg2.clone()),
-                *out = *arg1 * *arg1,
-                *out = *arg1 * *arg2,
-            ),
-            Instr::Abs { arg, out } => unop_num!(self, arg, out, arg.abs()),
-            Instr::Fact { arg, out } => unop_num!(self, arg, out, arg.fact()),
-            Instr::Sqrt { arg, out } => unop_num!(self, arg, out, arg.sqrt()),
-            Instr::Sin { arg, out } => unop_num!(self, arg, out, arg.sin()),
-            Instr::Cos { arg, out } => unop_num!(self, arg, out, arg.cos()),
-            Instr::Tan { arg, out } => unop_num!(self, arg, out, arg.tan()),
-            Instr::Asin { arg, out } => unop_num!(self, arg, out, arg.asin()),
-            Instr::Acos { arg, out } => unop_num!(self, arg, out, arg.acos()),
-            Instr::Atan { arg, out } => unop_num!(self, arg, out, arg.atan()),
-            Instr::Neg { arg, out } => unop_num!(self, arg, out, -arg),
-            Instr::Not { arg, out } => unop_num!(self, arg, out, !arg),
-            Instr::And { arg1, arg2, out } => {
-                let arg1 = unsafe { self.num_ref(arg1).as_bool() };
-                let arg2 = unsafe { self.num_ref(arg2).as_bool() };
-                *unsafe { self.num_mut(out) } = (arg1 && arg2).into();
-                self.set_next_instr();
-            },
-            Instr::Or { arg1, arg2, out } => {
-                let arg1 = unsafe { self.num_ref(arg1).as_bool() };
-                let arg2 = unsafe { self.num_ref(arg2).as_bool() };
-                *unsafe { self.num_mut(out) } = (arg1 || arg2).into();
-                self.set_next_instr();
-            },
-            Instr::Eq { arg1, arg2, out } => cmp!(self, arg1, arg2, out, true, arg1 == arg2),
-            Instr::Le { arg1, arg2, out } => cmp!(
-                self,
-                arg1,
-                arg2,
-                out,
-                true,
-                arg1.le(arg2, unsafe { self.get_buffer() }),
-            ),
-            Instr::Lt { arg1, arg2, out } => cmp!(
-                self,
-                arg1,
-                arg2,
-                out,
-                false,
-                arg1.lt(arg2, unsafe { self.get_buffer() }),
-            ),
-            Instr::BoolN { arg, out } => unop_num!(self, arg, out, arg.as_bool().into()),
-            Instr::BoolV { arg, out } => {
-                let result = unsafe { self.val_ref(arg).as_bool() };
-                *unsafe { self.num_mut(out) } = result.into();
-                self.set_next_instr();
-            },
+            Instr::AddS { arg1, arg2, out } => self.add_s(arg1, arg2, out),
+            Instr::AddN { arg1, arg2, out } => self.add_n(arg1, arg2, out),
+            Instr::AddV { arg1, arg2, out } => self.add_v(arg1, arg2, out),
+            Instr::SubS { arg1, arg2, out } => self.sub_s(arg1, arg2, out),
+            Instr::SubN { arg1, arg2, out } => self.sub_n(arg1, arg2, out),
+            Instr::SubV { arg1, arg2, out } => self.sub_v(arg1, arg2, out),
+            Instr::IncS { arg, out } => self.inc_s(arg, out),
+            Instr::IncN { arg, out } => self.inc_n(arg, out),
+            Instr::IncV { arg, out } => self.inc_v(arg, out),
+            Instr::DecS { arg, out } => self.dec_s(arg, out)?,
+            Instr::DecN { arg, out } => self.dec_n(arg, out),
+            Instr::DecV { arg, out } => self.dec_v(arg, out)?,
+            Instr::Mul { arg1, arg2, out } => self.mul(arg1, arg2, out),
+            Instr::Div { arg1, arg2, out } => self.div(arg1, arg2, out)?,
+            Instr::Mod { arg1, arg2, out } => self.mod_instr(arg1, arg2, out)?,
+            Instr::Pow { arg1, arg2, out } => self.pow(arg1, arg2, out),
+            Instr::Abs { arg, out } => self.abs(arg, out),
+            Instr::Fact { arg, out } => self.fact(arg, out),
+            Instr::Sqrt { arg, out } => self.sqrt(arg, out),
+            Instr::Sin { arg, out } => self.sin(arg, out),
+            Instr::Cos { arg, out } => self.cos(arg, out),
+            Instr::Tan { arg, out } => self.tan(arg, out),
+            Instr::Asin { arg, out } => self.asin(arg, out),
+            Instr::Acos { arg, out } => self.acos(arg, out),
+            Instr::Atan { arg, out } => self.atan(arg, out),
+            Instr::Neg { arg, out } => self.neg(arg, out),
+            Instr::Not { arg, out } => self.not(arg, out),
+            Instr::And { arg1, arg2, out } => self.and(arg1, arg2, out),
+            Instr::Or { arg1, arg2, out } => self.or(arg1, arg2, out),
+            Instr::Eq { arg1, arg2, out } => self.eq(arg1, arg2, out),
+            Instr::Le { arg1, arg2, out } => self.le(arg1, arg2, out),
+            Instr::Lt { arg1, arg2, out } => self.lt(arg1, arg2, out),
+            Instr::BoolN { arg, out } => self.bool_n(arg, out),
+            Instr::BoolV { arg, out } => self.bool_v(arg, out),
         };
         Some(false)
     }
