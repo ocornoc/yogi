@@ -54,7 +54,7 @@ impl VMExec {
                 }
                 let t_len = self.code.len();
                 self.code[cond_len] = Instr::JumpRel {
-                    amount: e_len - cond_len,
+                    amount: e_len - cond_len + 1,
                     condition: Some(cond),
                 };
                 self.code[e_len] = Instr::JumpRel {

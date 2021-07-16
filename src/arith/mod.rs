@@ -54,7 +54,7 @@ impl Number {
     }
 
     pub fn as_bool(self) -> bool {
-        self == Self::ZERO
+        self != Self::ZERO
     }
 
     pub fn stringify<'a>(&self, buffer: &'a mut String) -> &'a mut YString {

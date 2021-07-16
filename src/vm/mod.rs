@@ -325,6 +325,8 @@ impl VMExec {
             // SAFE: only one ref taken
             if unsafe { self.num_mut(condition).as_bool() } {
                 self.next_instr += amount;
+            } else {
+                self.set_next_instr();
             }
         } else {
             self.next_instr += amount;
