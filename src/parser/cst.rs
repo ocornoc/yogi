@@ -41,7 +41,7 @@ pub enum ParseErr {
 fn parse_ident(remainder: &mut &[char], col: &mut usize, id: &mut String) {
     let mut end_idx = remainder.len();
     for (i, c) in remainder.iter().enumerate() {
-        if !c.is_alphanumeric() {
+        if !c.is_alphanumeric() && *c != '_' {
             end_idx = i;
             break;
         }
@@ -76,7 +76,7 @@ impl TryFrom<raw::Line> for Line {
 
         while let &[c, ref r@..] = remainder {
             remainder = r;
-            if c.is_alphabetic() {
+            if c.is_alphabetic() || c == '_' {
                 let mut id: String = c.into();
                 let start = col;
                 parse_ident(&mut remainder, &mut col, &mut id);
