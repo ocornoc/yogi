@@ -5,17 +5,62 @@ mod parser;
 mod vm;
 mod arith;
 
-fn main() {
+fn script() -> parser::raw::Script {
     let mut script = parser::raw::Script::default();
     script.0[0].0 =
-        ":a=2 ++bc bc++ ++:bc :bc++ ++a c++ goto :a+:b"
+        ":done++ b=97 c=89"
         .chars()
         .collect();
+    script.0[1].0 =
+        ":o++ :done++"
+        .chars()
+        .collect();
+    script.0[2].0 =
+        ":done++ x-- x=\"abc\" x=atan x"
+        .chars()
+        .collect();
+    script.0[3].0 =
+        "i=(127-1) _=(i/3%1==0)*i/3>1+(i/5%1==0)*i/5>1+(i/7%1==0)*i/7>1 a=i/11%1==0 x=atan x"
+        .chars()
+        .collect();
+    script.0[4].0 =
+        "_+=a*i/11>1+(i/13%1==0)*i/13>1+(i/17%1==0)*i/17>1+(i/19%1==0)*i/19>1 x=atan x"
+        .chars()
+        .collect();
+    script.0[5].0 =
+        "_+=(i/23%1==0)*i/23>1+(i/29%1==0)*i/29>1+(i/31%1==0)*i/31>1a=i/37%1==0 x=atan x"
+        .chars()
+        .collect();
+    script.0[6].0 =
+        "_+=a*i/37>1+(i/41%1==0)*i/41>1+(i/43%1==0)*i/43>1+(i/47%1==0)*i/47>1 x=atan x"
+        .chars()
+        .collect();
+    script.0[7].0 =
+        "_+=(i/53%1==0)*i/53>1+(i/59%1==0)*i/59>1+(i/61%1==0)*i/61>1a=i/67%1==0 x=atan x"
+        .chars()
+        .collect();
+    script.0[8].0 =
+        "_+=a*i/67>1+(i/71%1==0)*i/71>1+(i/73%1==0)*i/73>1+(i/79%1==0)*i/79>1 x=atan x"
+        .chars()
+        .collect();
+    script.0[9].0 =
+        "_+=(i/83%1==0)*i/83>1+(i/c%1==0)*i/c>1+(i/b%1==0)*i/b>1:o+=_<1:done++ x=atan x"
+        .chars()
+        .collect();
+    script.0[10].0 =
+        "z=:o :done++goto 4"
+        .chars()
+        .collect();
+    script
+}
+
+fn main() {
+    let script = script();
     let script: parser::cst::Script = script.try_into().unwrap();
     let script: parser::pre_ast::Script = script.try_into().unwrap();
     let script: parser::ast::Script = script.try_into().unwrap();
     let mut vm = vm::VMExec::from(script);
-    const NUM_LINES: usize = 100_000_000;
+    const NUM_LINES: usize = 1_000_000;
     let start = Instant::now();
     for _ in 0..NUM_LINES {
         vm.step();
