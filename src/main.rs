@@ -12,7 +12,7 @@ fn script() -> parser::raw::Script {
         .chars()
         .collect();
     script.0[1].0 =
-        ":o++ :done++ if 2 then :hi = \"wow\" else :hi = \"crazy\" end :o++"
+        ":o++ :done++"
         .chars()
         .collect();
     script.0[2].0 =
@@ -48,6 +48,10 @@ fn script() -> parser::raw::Script {
         .chars()
         .collect();
     script.0[10].0 =
+        "a=1 if _ then a=2 else a=\"2\" end _/=a"
+        .chars()
+        .collect();
+    script.0[11].0 =
         "z=:o :done++goto 4"
         .chars()
         .collect();
