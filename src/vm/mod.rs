@@ -193,6 +193,7 @@ macro_rules! cmp {
         };
         // SAFE: mut ref taken only after all other refs have been used
         *unsafe { $self.num_mut($out) } = result.into();
+        $self.set_next_instr();
     } };
 }
 
@@ -351,6 +352,7 @@ impl VMExec {
             Instr::MoveVV { arg, out } => if arg != out {
                 // SAFE: all registers are guaranteed not to alias
                 unsafe { self.val_mut(out).clone_from(self.val_mut(arg)) };
+                self.set_next_instr();
             },
             /*// SAFE: all registers are guaranteed not to alias
             Instr::MoveVS { arg, out } => if let Value::Str(s) = unsafe { self.val_mut(arg) } {
