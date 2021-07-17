@@ -74,7 +74,7 @@ fn main() {
     if firestorm::enabled() {
         firestorm::bench("./flames/", fs_main).unwrap();
     } else {
-        const NUM_LINES: usize = 2_000_000;
+        const NUM_LINES: usize = 10_000_000;
         let script = script();
         let script: parser::cst::Script = script.try_into().unwrap();
         let script: parser::pre_ast::Script = script.try_into().unwrap();
