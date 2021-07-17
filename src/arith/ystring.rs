@@ -6,7 +6,7 @@ pub struct YString(pub String);
 
 impl YString {
     pub fn pre_inc(&mut self) {
-        self.insert(0, ' ');
+        self.push(' ');
     }
 
     pub fn post_inc_v(&mut self, out: &mut Value) {
