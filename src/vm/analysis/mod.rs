@@ -277,8 +277,7 @@ impl VMExec {
                     }
                     last_node = None;
                 },
-                Instr::MoveVN { .. } | Instr::SubS { .. }
-                | Instr::SubV { .. } | Instr::DecS { .. } | Instr::DecV { .. } => {
+                Instr::JumpErr => {
                     if let Some(last_node) = last_node {
                         graph.add_edge(last_node, node, ReachReason::Continue);
                     }
