@@ -2,6 +2,7 @@ use super::*;
 use arith::*;
 use crate::parser::{NUM_LINES, ast::*};
 use std::array::IntoIter;
+use std::fmt::Write;
 use ahash::AHashMap;
 use std::cell::{Cell, UnsafeCell};
 
@@ -35,10 +36,10 @@ enum Instr {
     MoveSV { arg: StringReg, out: ValueReg },
     MoveNV { arg: NumberReg, out: ValueReg },
     MoveVV { arg: ValueReg, out: ValueReg },
-    //MoveVS { arg: ValueReg, out: StringReg },
+    MoveVS { arg: ValueReg, out: StringReg },
     MoveVN { arg: ValueReg, out: NumberReg },
-    //StringifyN { arg: NumberReg, out: StringReg },
-    //StringifyV { val: ValueReg, out: StringReg },
+    StringifyN { arg: NumberReg, out: StringReg },
+    StringifyV { arg: ValueReg, out: StringReg },
     AddS { arg1: StringReg, arg2: StringReg, out: StringReg },
     AddN { arg1: NumberReg, arg2: NumberReg, out: NumberReg },
     AddV { arg1: ValueReg, arg2: ValueReg, out: ValueReg },
@@ -393,6 +394,18 @@ impl VMExec {
         self.set_next_instr();
     }
 
+    fn move_vs(&mut self, arg: ValueReg, out: StringReg) {
+        firestorm::profile_method!("move_vs");
+        let out = if let Value::Str(s) = unsafe { self.val_mut(arg) } {
+            unsafe { self.str_mut(out).clone_from(s) };
+            false
+        } else {
+            true
+        };
+        self.set_next_instr();
+        self.runtime_err_flag.set(out);
+    }
+
     fn move_vn(&mut self, arg: ValueReg, out: NumberReg) {
         firestorm::profile_method!("move_vn");
         let out = if let Value::Number(n) = unsafe { self.val_mut(arg) } {
@@ -653,6 +666,30 @@ impl VMExec {
         self.set_next_instr();
     }
 
+    fn stringify_n(&mut self, arg: NumberReg, out: StringReg) {
+        firestorm::profile_method!("stringify_n");
+        let arg = unsafe { self.num_ref(arg) };
+        let out = unsafe { self.str_mut(out) };
+        out.clear();
+        write!(out, "{}", arg).unwrap();
+        self.set_next_instr();
+    }
+
+    fn stringify_v(&mut self, arg: ValueReg, out: StringReg) {
+        firestorm::profile_method!("stringify_v");
+        let out = unsafe { self.str_mut(out) };
+        match unsafe { self.val_ref(arg) } {
+            Value::Number(arg) => { 
+                out.clear();
+                write!(out, "{}", arg).unwrap();
+            },
+            Value::Str(arg) => {
+                out.clone_from(arg);
+            },
+        }
+        self.set_next_instr();
+    }
+
     #[inline]
     fn set_flag_err_res<U>(&self, res: Result<(), U>) {
         self.runtime_err_flag.set(res.is_err());
@@ -686,17 +723,10 @@ impl VMExec {
             Instr::MoveSV { arg, out } => self.move_sv(arg, out),
             Instr::MoveNV { arg, out } => self.move_nv(arg, out),
             Instr::MoveVV { arg, out } => self.move_vv(arg, out),
-            /*// SAFE: all registers are guaranteed not to alias
-            Instr::MoveVS { arg, out } => if let Value::Str(s) = unsafe { self.val_mut(arg) } {
-                unsafe { self.str_mut(out).clone_from(s) };
-                self.set_next_instr();
-            } else {
-                return None;
-            },*/
-            // SAFE: all registers are guaranteed not to alias
+            Instr::MoveVS { arg, out } => self.move_vs(arg, out),
             Instr::MoveVN { arg, out } => self.move_vn(arg, out),
-            //Instr::StringifyN { arg, out } => todo!(),
-            //Instr::StringifyV { val, out } => todo!(),
+            Instr::StringifyN { arg, out } => self.stringify_n(arg, out),
+            Instr::StringifyV { arg, out } => self.stringify_v(arg, out),
             Instr::AddS { arg1, arg2, out } => self.add_s(arg1, arg2, out),
             Instr::AddN { arg1, arg2, out } => self.add_n(arg1, arg2, out),
             Instr::AddV { arg1, arg2, out } => self.add_v(arg1, arg2, out),

@@ -177,6 +177,14 @@ impl ControlFlowGraph {
                         i_arg1 = arg.into();
                         i_out = Some(out.into());
                     },
+                    Instr::StringifyN { arg, out } => {
+                        i_arg1 = arg.into();
+                        i_out = Some(out.into());
+                    },
+                    Instr::StringifyV { arg, out } | Instr::MoveVS { arg, out } => {
+                        i_arg1 = arg.into();
+                        i_out = Some(out.into());
+                    },
                     Instr::LineStart(_) | Instr::JumpErr | Instr::JumpLine(_)
                     | Instr::JumpRel { .. } => continue,
                 }
