@@ -94,17 +94,20 @@ fn main() {
         let mut graph = vm.control_flow_graph();
         graph.clean_up();
         println!("DFG:\n{}", graph.dfg(&vm));
-        let start = Instant::now();
-        for _ in 0..NUM_LINES {
-            vm.step();
-        }
-        let done = Instant::now();
-        let time_taken = (done - start).as_secs_f32();
-        let lines_per_sec = NUM_LINES as f32 / time_taken;
-        println!("finished execution in {}s at a rate of {} lines/sec.", time_taken, lines_per_sec);
-        println!("Globals:");
-        for (name, val) in vm.globals() {
-            println!(":{} = {}", name, val);
+        loop {
+            let start = Instant::now();
+            for _ in 0..NUM_LINES {
+                vm.step();
+            }
+            let done = Instant::now();
+            let time_taken = (done - start).as_secs_f32();
+            let lines_per_sec = NUM_LINES as f32 / time_taken;
+            println!(
+                "finished execution of {} lines in {}s at a rate of {} lines/sec.",
+                NUM_LINES,
+                time_taken,
+                lines_per_sec,
+            );
         }
     }
 }
