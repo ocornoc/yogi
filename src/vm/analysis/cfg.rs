@@ -226,7 +226,7 @@ impl VMExec {
                         last_node = Some(node);
                     }
 
-                    jumps.push((node, loc + amount, true));
+                    jumps.push((node, loc + amount + 1, true));
                 },
                 Instr::JumpLine(_) => {
                     if let Some(last_node) = last_node {
