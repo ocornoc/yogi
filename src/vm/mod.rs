@@ -12,13 +12,13 @@ pub mod analysis;
 
 type Reg = u16;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 struct NumberReg(Reg);
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 struct StringReg(Reg);
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 struct ValueReg(Reg);
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -75,11 +75,29 @@ enum Instr {
     BoolV { arg: ValueReg, out: NumberReg },
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 enum AnyReg {
     Number(NumberReg),
     String(StringReg),
     Value(ValueReg),
+}
+
+impl From<NumberReg> for AnyReg {
+    fn from(reg: NumberReg) -> Self {
+        AnyReg::Number(reg)
+    }
+}
+
+impl From<StringReg> for AnyReg {
+    fn from(reg: StringReg) -> Self {
+        AnyReg::String(reg)
+    }
+}
+
+impl From<ValueReg> for AnyReg {
+    fn from(reg: ValueReg) -> Self {
+        AnyReg::Value(reg)
+    }
 }
 
 impl AnyReg {

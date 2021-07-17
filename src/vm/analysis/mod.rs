@@ -7,6 +7,7 @@ use nohash_hasher::IntSet;
 pub type CodeLoc = usize;
 
 pub mod cfg;
+pub mod dfg;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CodeRange(Range<CodeLoc>);

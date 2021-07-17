@@ -21,9 +21,12 @@ impl Display for ReachReason {
     }
 }
 
+type Idx = u16;
+pub type NodeIndex = petgraph::stable_graph::NodeIndex<Idx>;
+
 #[derive(Debug, Clone)]
 pub struct ControlFlowGraph {
-    graph: StableDiGraph<CodeRange, ReachReason>,
+    graph: StableDiGraph<CodeRange, ReachReason, Idx>,
     root: NodeIndex,
 }
 
@@ -172,7 +175,7 @@ impl Display for ControlFlowGraph {
 }
 
 impl Deref for ControlFlowGraph {
-    type Target = StableDiGraph<CodeRange, ReachReason>;
+    type Target = StableDiGraph<CodeRange, ReachReason, Idx>;
 
     fn deref(&self) -> &Self::Target {
         &self.graph

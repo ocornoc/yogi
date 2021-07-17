@@ -93,7 +93,7 @@ fn main() {
         let mut vm = vm::VMExec::from(script);
         let mut graph = vm.control_flow_graph();
         graph.clean_up();
-        println!("CFG (optimized):\n{}", graph);
+        println!("DFG:\n{}", graph.dfg(&vm));
         let start = Instant::now();
         for _ in 0..NUM_LINES {
             vm.step();
