@@ -92,7 +92,6 @@ fn main() {
         let script: parser::ast::Script = script.try_into().unwrap();
         let mut vm = vm::VMExec::from(script);
         let mut graph = vm.control_flow_graph();
-        println!("CFG (raw):\n{}", graph);
         graph.clean_up();
         println!("CFG (optimized):\n{}", graph);
         let start = Instant::now();
