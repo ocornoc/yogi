@@ -58,8 +58,18 @@ fn script() -> parser::raw::Script {
     script
 }
 
+fn set_core_affinity() {
+    core_affinity::set_for_current(core_affinity::get_core_ids()
+        .unwrap()
+        .into_iter()
+        .last()
+        .unwrap()
+    );
+}
+
 fn fs_main() {
     const NUM_LINES: usize = 10_000;
+    set_core_affinity();
     let script = script();
     let script: parser::cst::Script = script.try_into().unwrap();
     let script: parser::pre_ast::Script = script.try_into().unwrap();
@@ -75,6 +85,7 @@ fn main() {
         firestorm::bench("./flames/", fs_main).unwrap();
     } else {
         const NUM_LINES: usize = 10_000_000;
+        set_core_affinity();
         let script = script();
         let script: parser::cst::Script = script.try_into().unwrap();
         let script: parser::pre_ast::Script = script.try_into().unwrap();
