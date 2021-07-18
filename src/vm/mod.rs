@@ -5,10 +5,12 @@ use std::array::IntoIter;
 use std::fmt::Write;
 use ahash::AHashMap;
 use std::cell::{Cell, UnsafeCell};
+use instr::*;
 
 const STRING_CAP: usize = 4096;
 
 mod codegen;
+mod instr;
 pub mod analysis;
 
 type Reg = u16;
@@ -27,54 +29,7 @@ struct Label(Reg);
 
 type Line = u8;
 
-#[derive(Debug, Clone)]
-enum Instr {
-    LineStart(Line),
-    JumpRel { amount: usize, condition: Option<NumberReg> },
-    JumpErr,
-    JumpLine(NumberReg),
-    MoveSV { arg: StringReg, out: ValueReg },
-    MoveNV { arg: NumberReg, out: ValueReg },
-    MoveVV { arg: ValueReg, out: ValueReg },
-    MoveVS { arg: ValueReg, out: StringReg },
-    MoveVN { arg: ValueReg, out: NumberReg },
-    StringifyN { arg: NumberReg, out: StringReg },
-    StringifyV { arg: ValueReg, out: StringReg },
-    AddS { arg1: StringReg, arg2: StringReg, out: StringReg },
-    AddN { arg1: NumberReg, arg2: NumberReg, out: NumberReg },
-    AddV { arg1: ValueReg, arg2: ValueReg, out: ValueReg },
-    SubS { arg1: StringReg, arg2: StringReg, out: StringReg },
-    SubN { arg1: NumberReg, arg2: NumberReg, out: NumberReg },
-    SubV { arg1: ValueReg, arg2: ValueReg, out: ValueReg },
-    Mul { arg1: NumberReg, arg2: NumberReg, out: NumberReg },
-    Div { arg1: NumberReg, arg2: NumberReg, out: NumberReg },
-    Mod { arg1: NumberReg, arg2: NumberReg, out: NumberReg },
-    Pow { arg1: NumberReg, arg2: NumberReg, out: NumberReg },
-    Eq { arg1: ValueReg, arg2: ValueReg, out: NumberReg },
-    Le { arg1: ValueReg, arg2: ValueReg, out: NumberReg },
-    Lt { arg1: ValueReg, arg2: ValueReg, out: NumberReg },
-    IncS { arg: StringReg, out: StringReg },
-    IncN { arg: NumberReg, out: NumberReg },
-    IncV { arg: ValueReg, out: ValueReg },
-    DecS { arg: StringReg, out: StringReg },
-    DecN { arg: NumberReg, out: NumberReg },
-    DecV { arg: ValueReg, out: ValueReg },
-    Abs { arg: NumberReg, out: NumberReg },
-    Fact { arg: NumberReg, out: NumberReg },
-    Sqrt { arg: NumberReg, out: NumberReg },
-    Sin { arg: NumberReg, out: NumberReg },
-    Cos { arg: NumberReg, out: NumberReg },
-    Tan { arg: NumberReg, out: NumberReg },
-    Asin { arg: NumberReg, out: NumberReg },
-    Acos { arg: NumberReg, out: NumberReg },
-    Atan { arg: NumberReg, out: NumberReg },
-    Neg { arg: NumberReg, out: NumberReg },
-    And { arg1: NumberReg, arg2: NumberReg, out: NumberReg },
-    Or { arg1: NumberReg, arg2: NumberReg, out: NumberReg },
-    Not { arg: NumberReg, out: NumberReg },
-    BoolN { arg: NumberReg, out: NumberReg },
-    BoolV { arg: ValueReg, out: NumberReg },
-}
+
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 enum AnyReg {
@@ -106,12 +61,12 @@ impl AnyReg {
         match self {
             AnyReg::Number(arg) => {
                 let out = vm.new_val_reg(Value::Number(Number::ZERO));
-                vm.code.push(Instr::MoveNV { arg, out });
+                vm.code.push(HLInstr::MoveNV { arg, out });
                 out
             },
             AnyReg::String(arg) => {
                 let out = vm.new_val_reg(Value::Number(Number::ZERO));
-                vm.code.push(Instr::MoveSV { arg, out });
+                vm.code.push(HLInstr::MoveSV { arg, out });
                 out
             },
             AnyReg::Value(arg) => arg,
@@ -125,8 +80,8 @@ impl AnyReg {
             AnyReg::Value(arg) => arg,
         };
         let out = vm.new_num_reg(Number::ZERO);
-        vm.code.push(Instr::MoveVN { arg, out });
-        vm.code.push(Instr::JumpErr);
+        vm.code.push(HLInstr::MoveVN { arg, out });
+        vm.code.push(HLInstr::JumpErr);
         out
     }
 
@@ -134,13 +89,13 @@ impl AnyReg {
         match self {
             AnyReg::Number(arg) => {
                 let out = vm.new_num_reg(Number::ZERO);
-                vm.code.push(Instr::BoolN { arg, out });
+                vm.code.push(HLInstr::BoolN { arg, out });
                 out
             },
             AnyReg::String(_) => vm.new_num_reg(Number::ONE),
             AnyReg::Value(arg) => {
                 let out = vm.new_num_reg(Number::ZERO);
-                vm.code.push(Instr::BoolV { arg, out });
+                vm.code.push(HLInstr::BoolV { arg, out });
                 out
             },
         }
@@ -221,7 +176,7 @@ macro_rules! cmp {
 
 #[derive(Debug, Default)]
 pub struct VMExec {
-    code: Vec<Instr>,
+    code: Vec<HLInstr>,
     numbers: Vec<UnsafeCell<Number>>,
     strings: Vec<UnsafeCell<YString>>,
     values: Vec<UnsafeCell<Value>>,
@@ -708,59 +663,59 @@ impl VMExec {
     fn step_aux(&mut self) -> bool {
         firestorm::profile_method!("step_aux");
         match self.code[self.next_instr] {
-            Instr::LineStart(line) => self.line_start(line),
-            Instr::JumpRel { amount, condition } => self.jump_rel(amount, condition),
-            Instr::JumpErr => if self.runtime_err_flag.get() {
+            HLInstr::LineStart(line) => self.line_start(line),
+            HLInstr::JumpRel { amount, condition } => self.jump_rel(amount, condition),
+            HLInstr::JumpErr => if self.runtime_err_flag.get() {
                 self.runtime_err();
                 return true;
             } else {
                 self.set_next_instr()
             },
-            Instr::JumpLine(reg) => {
+            HLInstr::JumpLine(reg) => {
                 self.jump_line(reg);
                 return true;
             },
-            Instr::MoveSV { arg, out } => self.move_sv(arg, out),
-            Instr::MoveNV { arg, out } => self.move_nv(arg, out),
-            Instr::MoveVV { arg, out } => self.move_vv(arg, out),
-            Instr::MoveVS { arg, out } => self.move_vs(arg, out),
-            Instr::MoveVN { arg, out } => self.move_vn(arg, out),
-            Instr::StringifyN { arg, out } => self.stringify_n(arg, out),
-            Instr::StringifyV { arg, out } => self.stringify_v(arg, out),
-            Instr::AddS { arg1, arg2, out } => self.add_s(arg1, arg2, out),
-            Instr::AddN { arg1, arg2, out } => self.add_n(arg1, arg2, out),
-            Instr::AddV { arg1, arg2, out } => self.add_v(arg1, arg2, out),
-            Instr::SubS { arg1, arg2, out } => self.sub_s(arg1, arg2, out),
-            Instr::SubN { arg1, arg2, out } => self.sub_n(arg1, arg2, out),
-            Instr::SubV { arg1, arg2, out } => self.sub_v(arg1, arg2, out),
-            Instr::IncS { arg, out } => self.inc_s(arg, out),
-            Instr::IncN { arg, out } => self.inc_n(arg, out),
-            Instr::IncV { arg, out } => self.inc_v(arg, out),
-            Instr::DecS { arg, out } => self.dec_s(arg, out),
-            Instr::DecN { arg, out } => self.dec_n(arg, out),
-            Instr::DecV { arg, out } => self.dec_v(arg, out),
-            Instr::Mul { arg1, arg2, out } => self.mul(arg1, arg2, out),
-            Instr::Div { arg1, arg2, out } => self.div(arg1, arg2, out),
-            Instr::Mod { arg1, arg2, out } => self.mod_instr(arg1, arg2, out),
-            Instr::Pow { arg1, arg2, out } => self.pow(arg1, arg2, out),
-            Instr::Abs { arg, out } => self.abs(arg, out),
-            Instr::Fact { arg, out } => self.fact(arg, out),
-            Instr::Sqrt { arg, out } => self.sqrt(arg, out),
-            Instr::Sin { arg, out } => self.sin(arg, out),
-            Instr::Cos { arg, out } => self.cos(arg, out),
-            Instr::Tan { arg, out } => self.tan(arg, out),
-            Instr::Asin { arg, out } => self.asin(arg, out),
-            Instr::Acos { arg, out } => self.acos(arg, out),
-            Instr::Atan { arg, out } => self.atan(arg, out),
-            Instr::Neg { arg, out } => self.neg(arg, out),
-            Instr::Not { arg, out } => self.not(arg, out),
-            Instr::And { arg1, arg2, out } => self.and(arg1, arg2, out),
-            Instr::Or { arg1, arg2, out } => self.or(arg1, arg2, out),
-            Instr::Eq { arg1, arg2, out } => self.eq(arg1, arg2, out),
-            Instr::Le { arg1, arg2, out } => self.le(arg1, arg2, out),
-            Instr::Lt { arg1, arg2, out } => self.lt(arg1, arg2, out),
-            Instr::BoolN { arg, out } => self.bool_n(arg, out),
-            Instr::BoolV { arg, out } => self.bool_v(arg, out),
+            HLInstr::MoveSV { arg, out } => self.move_sv(arg, out),
+            HLInstr::MoveNV { arg, out } => self.move_nv(arg, out),
+            HLInstr::MoveVV { arg, out } => self.move_vv(arg, out),
+            HLInstr::MoveVS { arg, out } => self.move_vs(arg, out),
+            HLInstr::MoveVN { arg, out } => self.move_vn(arg, out),
+            HLInstr::StringifyN { arg, out } => self.stringify_n(arg, out),
+            HLInstr::StringifyV { arg, out } => self.stringify_v(arg, out),
+            HLInstr::AddS { arg1, arg2, out } => self.add_s(arg1, arg2, out),
+            HLInstr::AddN { arg1, arg2, out } => self.add_n(arg1, arg2, out),
+            HLInstr::AddV { arg1, arg2, out } => self.add_v(arg1, arg2, out),
+            HLInstr::SubS { arg1, arg2, out } => self.sub_s(arg1, arg2, out),
+            HLInstr::SubN { arg1, arg2, out } => self.sub_n(arg1, arg2, out),
+            HLInstr::SubV { arg1, arg2, out } => self.sub_v(arg1, arg2, out),
+            HLInstr::IncS { arg, out } => self.inc_s(arg, out),
+            HLInstr::IncN { arg, out } => self.inc_n(arg, out),
+            HLInstr::IncV { arg, out } => self.inc_v(arg, out),
+            HLInstr::DecS { arg, out } => self.dec_s(arg, out),
+            HLInstr::DecN { arg, out } => self.dec_n(arg, out),
+            HLInstr::DecV { arg, out } => self.dec_v(arg, out),
+            HLInstr::Mul { arg1, arg2, out } => self.mul(arg1, arg2, out),
+            HLInstr::Div { arg1, arg2, out } => self.div(arg1, arg2, out),
+            HLInstr::Mod { arg1, arg2, out } => self.mod_instr(arg1, arg2, out),
+            HLInstr::Pow { arg1, arg2, out } => self.pow(arg1, arg2, out),
+            HLInstr::Abs { arg, out } => self.abs(arg, out),
+            HLInstr::Fact { arg, out } => self.fact(arg, out),
+            HLInstr::Sqrt { arg, out } => self.sqrt(arg, out),
+            HLInstr::Sin { arg, out } => self.sin(arg, out),
+            HLInstr::Cos { arg, out } => self.cos(arg, out),
+            HLInstr::Tan { arg, out } => self.tan(arg, out),
+            HLInstr::Asin { arg, out } => self.asin(arg, out),
+            HLInstr::Acos { arg, out } => self.acos(arg, out),
+            HLInstr::Atan { arg, out } => self.atan(arg, out),
+            HLInstr::Neg { arg, out } => self.neg(arg, out),
+            HLInstr::Not { arg, out } => self.not(arg, out),
+            HLInstr::And { arg1, arg2, out } => self.and(arg1, arg2, out),
+            HLInstr::Or { arg1, arg2, out } => self.or(arg1, arg2, out),
+            HLInstr::Eq { arg1, arg2, out } => self.eq(arg1, arg2, out),
+            HLInstr::Le { arg1, arg2, out } => self.le(arg1, arg2, out),
+            HLInstr::Lt { arg1, arg2, out } => self.lt(arg1, arg2, out),
+            HLInstr::BoolN { arg, out } => self.bool_n(arg, out),
+            HLInstr::BoolV { arg, out } => self.bool_v(arg, out),
         };
         false
     }
@@ -769,7 +724,7 @@ impl VMExec {
         firestorm::profile_method!("step");
         loop {
             let end_of_line = self.step_aux();
-            if end_of_line || matches!(self.code[self.next_instr], Instr::LineStart(_)) {
+            if end_of_line || matches!(self.code[self.next_instr], HLInstr::LineStart(_)) {
                 break;
             }
         }

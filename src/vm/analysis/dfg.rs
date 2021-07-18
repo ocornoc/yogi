@@ -119,74 +119,74 @@ impl ControlFlowGraph {
                 let mut i_arg2: Option<AnyReg> = None;
                 let mut i_out: Option<AnyReg> = None;
                 match vm.code[loc] {
-                    Instr::JumpRel { condition: Some(condition), .. } => {
+                    HLInstr::JumpRel { condition: Some(condition), .. } => {
                         i_arg1 = condition.into();
                     },
-                    Instr::MoveSV { arg, out } => {
+                    HLInstr::MoveSV { arg, out } => {
                         i_arg1 = arg.into();
                         i_out = Some(out.into());
                     },
-                    Instr::MoveNV { arg, out } => {
+                    HLInstr::MoveNV { arg, out } => {
                         i_arg1 = arg.into();
                         i_out = Some(out.into());
                     },
-                    Instr::MoveVV { arg, out } | Instr::IncV { arg, out }
-                    | Instr::DecV { arg, out } => {
+                    HLInstr::MoveVV { arg, out } | HLInstr::IncV { arg, out }
+                    | HLInstr::DecV { arg, out } => {
                         i_arg1 = arg.into();
                         i_out = Some(out.into());
                     },
-                    Instr::MoveVN { arg, out } | Instr::BoolV { arg, out } => {
+                    HLInstr::MoveVN { arg, out } | HLInstr::BoolV { arg, out } => {
                         i_arg1 = arg.into();
                         i_out = Some(out.into());
                     },
-                    Instr::AddS { arg1, arg2, out } | Instr::SubS { arg1, arg2, out } => {
+                    HLInstr::AddS { arg1, arg2, out } | HLInstr::SubS { arg1, arg2, out } => {
                         i_arg1 = arg1.into();
                         i_arg2 = Some(arg2.into());
                         i_out = Some(out.into());
                     },
-                    Instr::SubV { arg1, arg2, out } | Instr::AddV { arg1, arg2, out } => {
+                    HLInstr::SubV { arg1, arg2, out } | HLInstr::AddV { arg1, arg2, out } => {
                         i_arg1 = arg1.into();
                         i_arg2 = Some(arg2.into());
                         i_out = Some(out.into());
                     },
-                    Instr::AddN { arg1, arg2, out } | Instr::SubN { arg1, arg2, out }
-                    | Instr::Mul { arg1, arg2, out } | Instr::Div { arg1, arg2, out }
-                    | Instr::Mod { arg1, arg2, out } | Instr::Pow { arg1, arg2, out }
-                    | Instr::And { arg1, arg2, out } | Instr::Or { arg1, arg2, out } => {
+                    HLInstr::AddN { arg1, arg2, out } | HLInstr::SubN { arg1, arg2, out }
+                    | HLInstr::Mul { arg1, arg2, out } | HLInstr::Div { arg1, arg2, out }
+                    | HLInstr::Mod { arg1, arg2, out } | HLInstr::Pow { arg1, arg2, out }
+                    | HLInstr::And { arg1, arg2, out } | HLInstr::Or { arg1, arg2, out } => {
                         i_arg1 = arg1.into();
                         i_arg2 = Some(arg2.into());
                         i_out = Some(out.into());
                     },
-                    Instr::Eq { arg1, arg2, out } | Instr::Le { arg1, arg2, out }
-                    | Instr::Lt { arg1, arg2, out } => {
+                    HLInstr::Eq { arg1, arg2, out } | HLInstr::Le { arg1, arg2, out }
+                    | HLInstr::Lt { arg1, arg2, out } => {
                         i_arg1 = arg1.into();
                         i_arg2 = Some(arg2.into());
                         i_out = Some(out.into());
                     },
-                    Instr::IncS { arg, out } | Instr::DecS { arg, out } => {
+                    HLInstr::IncS { arg, out } | HLInstr::DecS { arg, out } => {
                         i_arg1 = arg.into();
                         i_out = Some(out.into());
                     },
-                    Instr::IncN { arg, out } | Instr::DecN { arg, out }
-                    | Instr::Abs { arg, out } | Instr::Fact { arg, out }
-                    | Instr::Sqrt { arg, out } | Instr::Sin { arg, out }
-                    | Instr::Tan { arg, out } | Instr::Asin { arg, out }
-                    | Instr::Acos { arg, out } | Instr::Atan { arg, out }
-                    | Instr::Neg { arg, out } | Instr::Not { arg, out }
-                    | Instr::BoolN { arg, out } | Instr::Cos { arg, out } => {
+                    HLInstr::IncN { arg, out } | HLInstr::DecN { arg, out }
+                    | HLInstr::Abs { arg, out } | HLInstr::Fact { arg, out }
+                    | HLInstr::Sqrt { arg, out } | HLInstr::Sin { arg, out }
+                    | HLInstr::Tan { arg, out } | HLInstr::Asin { arg, out }
+                    | HLInstr::Acos { arg, out } | HLInstr::Atan { arg, out }
+                    | HLInstr::Neg { arg, out } | HLInstr::Not { arg, out }
+                    | HLInstr::BoolN { arg, out } | HLInstr::Cos { arg, out } => {
                         i_arg1 = arg.into();
                         i_out = Some(out.into());
                     },
-                    Instr::StringifyN { arg, out } => {
+                    HLInstr::StringifyN { arg, out } => {
                         i_arg1 = arg.into();
                         i_out = Some(out.into());
                     },
-                    Instr::StringifyV { arg, out } | Instr::MoveVS { arg, out } => {
+                    HLInstr::StringifyV { arg, out } | HLInstr::MoveVS { arg, out } => {
                         i_arg1 = arg.into();
                         i_out = Some(out.into());
                     },
-                    Instr::LineStart(_) | Instr::JumpErr | Instr::JumpLine(_)
-                    | Instr::JumpRel { .. } => continue,
+                    HLInstr::LineStart(_) | HLInstr::JumpErr | HLInstr::JumpLine(_)
+                    | HLInstr::JumpRel { .. } => continue,
                 }
                 let mut flow_info_arg1 = DataFlowInfo {
                     cfg_node: section,
