@@ -16,20 +16,18 @@ pub mod analysis;
 type Reg = u16;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[repr(transparent)]
 struct NumberReg(Reg);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[repr(transparent)]
 struct StringReg(Reg);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[repr(transparent)]
 struct ValueReg(Reg);
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-struct Label(Reg);
-
 type Line = u8;
-
-
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 enum AnyReg {
