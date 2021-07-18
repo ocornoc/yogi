@@ -181,7 +181,6 @@ pub struct VMExec {
     values: Vec<UnsafeCell<Value>>,
     cur_line: Line,
     line_starts: [usize; NUM_LINES],
-    line_stats: [u32; NUM_LINES],
     next_instr: usize,
     globals: AHashMap<String, AnyReg>,
     string_buffer: UnsafeCell<YString>,

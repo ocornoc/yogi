@@ -5,7 +5,6 @@ impl VMExec {
     fn line_start(&mut self, line: Line) {
         firestorm::profile_method!("line_start");
         self.cur_line = line;
-        self.line_stats[line as usize] += 1;
         self.set_next_instr();
     }
 
