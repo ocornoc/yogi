@@ -64,6 +64,12 @@ impl Clone for YString {
     }
 }
 
+impl Display for YString {
+    fn fmt(&self, f: &mut Formatter) -> FmtResult {
+        write!(f, "\"{}\"", self.0.escape_debug())
+    }
+}
+
 impl From<String> for YString {
     fn from(s: String) -> Self {
         YString(s)

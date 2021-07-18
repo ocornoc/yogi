@@ -187,7 +187,7 @@ impl Display for Value {
     fn fmt(&self, f: &mut Formatter) -> FmtResult {
         match self {
             Value::Number(n) => write!(f, "{}", n),
-            Value::Str(s) => write!(f, "{}", s.0),
+            Value::Str(s) => write!(f, "{}", s),
         }
     }
 }
