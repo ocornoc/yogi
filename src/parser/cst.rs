@@ -38,10 +38,37 @@ pub enum ParseErr {
     KeywordInVariable,
 }
 
-fn parse_ident(remainder: &mut &[char], col: &mut usize, id: &mut String) {
+fn parse_local_ident<'a>(
+    remainder: &mut &'a [char],
+    col: &mut usize,
+    id: &mut String,
+) {
     let mut end_idx = remainder.len();
-    for (i, c) in remainder.iter().enumerate() {
-        if !c.is_alphanumeric() && *c != '_' {
+    for (i, &c) in remainder.iter().enumerate() {
+        if !c.is_alphanumeric() && c != '_' {
+            end_idx = i;
+            break;
+        }
+    }
+    let (l, r) = remainder.split_at(end_idx);
+    if l.len() >= 3 && id.chars().next().unwrap().eq_ignore_ascii_case(&'g')
+        && l[0].eq_ignore_ascii_case(&'o') && l[1].eq_ignore_ascii_case(&'t')
+        && l[2].eq_ignore_ascii_case(&'o')
+    {
+        *col += 3;
+        *remainder = &remainder[3..];
+        *id += "oto";
+    } else {
+        *col += end_idx;
+        *remainder = r;
+        id.extend(l.iter());
+    }
+}
+
+fn parse_global_ident(remainder: &mut &[char], col: &mut usize, id: &mut String) {
+    let mut end_idx = remainder.len();
+    for (i, &c) in remainder.iter().enumerate() {
+        if !c.is_alphanumeric() && c != '_' {
             end_idx = i;
             break;
         }
@@ -79,7 +106,7 @@ impl TryFrom<raw::Line> for Line {
             if c.is_alphabetic() || c == '_' {
                 let mut id: String = c.into();
                 let start = col;
-                parse_ident(&mut remainder, &mut col, &mut id);
+                parse_local_ident(&mut remainder, &mut col, &mut id);
                 id.make_ascii_lowercase();
                 if id == "if" {
                     tokens.push(Token {
@@ -105,7 +132,7 @@ impl TryFrom<raw::Line> for Line {
             } else if c == ':' {
                 let mut id: String = String::with_capacity(2);
                 let start = col;
-                parse_ident(&mut remainder, &mut col, &mut id);
+                parse_global_ident(&mut remainder, &mut col, &mut id);
                 id.make_ascii_lowercase();
                 if id.is_empty() {
                     return Err(ParseErr::NoGlobalName);
