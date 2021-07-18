@@ -32,7 +32,7 @@ fn set_core_affinity() {
 }
 
 fn fs_main() {
-    const NUM_LINES: usize = 10_000;
+    const NUM_LINES: usize = 100_000;
     set_core_affinity();
     let script = script();
     let script: parser::cst::Script = script.try_into().unwrap();
