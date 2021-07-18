@@ -304,3 +304,49 @@ impl VMExec {
             }))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_script(src: &str) -> VMExec {
+        let script: parser::raw::Script = src.parse().unwrap();
+        let script: parser::cst::Script = script.try_into().unwrap();
+        let script: parser::pre_ast::Script = script.try_into().unwrap();
+        let script: parser::ast::Script = script.try_into().unwrap();
+        script.into()
+    }
+
+    #[test]
+    fn string_test() {
+        static TEST: &str = "\
+            num=1 if \"\" then goto 19 end num++\n\
+            if \"abc\" then goto 19 end num++\n\
+            if \"1\" then goto 19 end num++\n\
+            if \"0\" then goto 19 end num++\n\
+            if not \"\" then goto 19 end num++\n\
+            if not \"1\" then goto 19 end num++\n\
+            if not \"0\" then goto 19 end num++\n\
+            if 1 and \"\" then goto 19 end num++\n\
+            if 1 and \"1\" then goto 19 end num++\n\
+            if 1 and \"0\" then goto 19 end num++\n\
+            if not (1 or \"\") then goto 19 end num++\n\
+            if not (1 or \"1\") then goto 19 end num++\n\
+            if not (1 or \"0\") then goto 19 end num++\n\
+            if 0 or \"\" then goto 19 end num++\n\
+            if 0 or \"1\" then goto 19 end num++\n\
+            if 0 or \"0\" then goto 19 end num++\n\
+            if num != 17 then :OUTPUT=\"Skipped: \"+(17-num)+\" tests\" goto 20 end\n\
+            :OUTPUT=\"ok\" goto20\n\
+            :output=\"Failed test #\"+num\n\
+            goto20\n\
+        ";
+        let mut vm = make_script(TEST);
+        for _ in 0..30 {
+            vm.step();
+        }
+        let (name, output) = vm.globals().next().unwrap();
+        debug_assert_eq!(name.to_ascii_lowercase(), "output");
+        debug_assert_eq!(output, Value::Str("ok".to_string().into()));
+    }
+}
