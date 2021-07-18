@@ -118,75 +118,88 @@ impl ControlFlowGraph {
                 let i_arg1: AnyReg;
                 let mut i_arg2: Option<AnyReg> = None;
                 let mut i_out: Option<AnyReg> = None;
-                match vm.code[loc] {
-                    HLInstr::JumpRel { condition: Some(condition), .. } => {
-                        i_arg1 = condition.into();
+                let instr = vm.code[loc];
+                match instr {
+                    Instr { tag: InstrTag::JumpRel, reg1, .. } if instr.get_jumprel_cond() =>
+                    unsafe {
+                        i_arg1 = reg1.assume_init().number.into();
                     },
-                    HLInstr::MoveSV { arg, out } => {
-                        i_arg1 = arg.into();
-                        i_out = Some(out.into());
+                    Instr { tag: InstrTag::MoveSV, reg0, reg1, .. } => unsafe {
+                        i_arg1 = reg0.assume_init().string.into();
+                        i_out = Some(reg1.assume_init().value.into());
                     },
-                    HLInstr::MoveNV { arg, out } => {
-                        i_arg1 = arg.into();
-                        i_out = Some(out.into());
+                    Instr { tag: InstrTag::MoveNV, reg0, reg1, .. } => unsafe {
+                        i_arg1 = reg0.assume_init().number.into();
+                        i_out = Some(reg1.assume_init().value.into());
                     },
-                    HLInstr::MoveVV { arg, out } | HLInstr::IncV { arg, out }
-                    | HLInstr::DecV { arg, out } => {
-                        i_arg1 = arg.into();
-                        i_out = Some(out.into());
+                    Instr {
+                        tag: InstrTag::MoveVV | InstrTag::IncV | InstrTag::DecV,
+                        reg0,
+                        reg1,
+                    .. } => unsafe {
+                        i_arg1 = reg0.assume_init().value.into();
+                        i_out = Some(reg1.assume_init().value.into());
                     },
-                    HLInstr::MoveVN { arg, out } | HLInstr::BoolV { arg, out } => {
-                        i_arg1 = arg.into();
-                        i_out = Some(out.into());
+                    Instr { tag: InstrTag::MoveVN | InstrTag::BoolV, reg0, reg1, .. } => unsafe {
+                        i_arg1 = reg0.assume_init().value.into();
+                        i_out = Some(reg1.assume_init().number.into());
                     },
-                    HLInstr::AddS { arg1, arg2, out } | HLInstr::SubS { arg1, arg2, out } => {
-                        i_arg1 = arg1.into();
-                        i_arg2 = Some(arg2.into());
-                        i_out = Some(out.into());
+                    Instr { tag: InstrTag::AddS | InstrTag::SubS, reg0, reg1, reg2, .. } => unsafe {
+                        i_arg1 = reg0.assume_init().string.into();
+                        i_arg2 = Some(reg1.assume_init().string.into());
+                        i_out = Some(reg2.assume_init().string.into());
                     },
-                    HLInstr::SubV { arg1, arg2, out } | HLInstr::AddV { arg1, arg2, out } => {
-                        i_arg1 = arg1.into();
-                        i_arg2 = Some(arg2.into());
-                        i_out = Some(out.into());
+                    Instr { tag: InstrTag::AddV | InstrTag::SubV, reg0, reg1, reg2, .. } => unsafe {
+                        i_arg1 = reg0.assume_init().value.into();
+                        i_arg2 = Some(reg1.assume_init().value.into());
+                        i_out = Some(reg2.assume_init().value.into());
                     },
-                    HLInstr::AddN { arg1, arg2, out } | HLInstr::SubN { arg1, arg2, out }
-                    | HLInstr::Mul { arg1, arg2, out } | HLInstr::Div { arg1, arg2, out }
-                    | HLInstr::Mod { arg1, arg2, out } | HLInstr::Pow { arg1, arg2, out }
-                    | HLInstr::And { arg1, arg2, out } | HLInstr::Or { arg1, arg2, out } => {
-                        i_arg1 = arg1.into();
-                        i_arg2 = Some(arg2.into());
-                        i_out = Some(out.into());
+                    Instr {
+                        tag: InstrTag::AddN | InstrTag::SubN | InstrTag::Mul | InstrTag::Div
+                        | InstrTag::Rem | InstrTag::Pow | InstrTag::And | InstrTag::Or,
+                        reg0,
+                        reg1,
+                        reg2,
+                    .. } => unsafe {
+                        i_arg1 = reg0.assume_init().number.into();
+                        i_arg2 = Some(reg1.assume_init().number.into());
+                        i_out = Some(reg2.assume_init().number.into());
                     },
-                    HLInstr::Eq { arg1, arg2, out } | HLInstr::Le { arg1, arg2, out }
-                    | HLInstr::Lt { arg1, arg2, out } => {
-                        i_arg1 = arg1.into();
-                        i_arg2 = Some(arg2.into());
-                        i_out = Some(out.into());
+                    Instr {
+                        tag: InstrTag::Eq | InstrTag::Le | InstrTag::Lt,
+                        reg0,
+                        reg1,
+                        reg2,
+                    .. } => unsafe {
+                        i_arg1 = reg0.assume_init().value.into();
+                        i_arg2 = Some(reg1.assume_init().value.into());
+                        i_out = Some(reg2.assume_init().number.into());
                     },
-                    HLInstr::IncS { arg, out } | HLInstr::DecS { arg, out } => {
-                        i_arg1 = arg.into();
-                        i_out = Some(out.into());
+                    Instr { tag: InstrTag::IncS | InstrTag::DecS, reg0, reg1, .. } => unsafe {
+                        i_arg1 = reg0.assume_init().string.into();
+                        i_out = Some(reg1.assume_init().string.into());
                     },
-                    HLInstr::IncN { arg, out } | HLInstr::DecN { arg, out }
-                    | HLInstr::Abs { arg, out } | HLInstr::Fact { arg, out }
-                    | HLInstr::Sqrt { arg, out } | HLInstr::Sin { arg, out }
-                    | HLInstr::Tan { arg, out } | HLInstr::Asin { arg, out }
-                    | HLInstr::Acos { arg, out } | HLInstr::Atan { arg, out }
-                    | HLInstr::Neg { arg, out } | HLInstr::Not { arg, out }
-                    | HLInstr::BoolN { arg, out } | HLInstr::Cos { arg, out } => {
-                        i_arg1 = arg.into();
-                        i_out = Some(out.into());
+                    Instr {
+                        tag: InstrTag::IncN | InstrTag::DecN | InstrTag::Abs | InstrTag::Fact
+                        | InstrTag::Sqrt | InstrTag::Sin | InstrTag::Cos | InstrTag::Tan
+                        | InstrTag::Asin | InstrTag::Acos | InstrTag::Atan | InstrTag::Neg
+                        | InstrTag::Not | InstrTag::BoolN,
+                        reg0,
+                        reg1,
+                    .. } => unsafe {
+                        i_arg1 = reg0.assume_init().number.into();
+                        i_out = Some(reg1.assume_init().number.into());
                     },
-                    HLInstr::StringifyN { arg, out } => {
-                        i_arg1 = arg.into();
-                        i_out = Some(out.into());
+                    Instr { tag: InstrTag::StringifyN, reg0, reg1, .. } => unsafe {
+                        i_arg1 = reg0.assume_init().string.into();
+                        i_out = Some(reg1.assume_init().number.into());
                     },
-                    HLInstr::StringifyV { arg, out } | HLInstr::MoveVS { arg, out } => {
-                        i_arg1 = arg.into();
-                        i_out = Some(out.into());
+                    Instr { tag: InstrTag::StringifyV | InstrTag::MoveVS, reg0, reg1, .. } =>
+                    unsafe {
+                        i_arg1 = reg0.assume_init().string.into();
+                        i_out = Some(reg1.assume_init().value.into());
                     },
-                    HLInstr::LineStart(_) | HLInstr::JumpErr | HLInstr::JumpLine(_)
-                    | HLInstr::JumpRel { .. } => continue,
+                    _ => continue,
                 }
                 let mut flow_info_arg1 = DataFlowInfo {
                     cfg_node: section,

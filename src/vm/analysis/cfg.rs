@@ -215,14 +215,15 @@ impl VMExec {
         for (loc, instr) in code {
             let node = graph.add_node(CodeRange(loc..loc + 1));
             match instr {
-                &HLInstr::LineStart(_) => {
+                Instr { tag: InstrTag::LineStart, .. } => {
                     if let Some(last_node) = last_node {
                         graph.add_edge(last_node, node, ReachReason::LineEnd);
                     }
                     last_node = Some(node);
                 },
-                &HLInstr::JumpRel { amount, condition } => {
-                    if condition.is_some() {
+                &Instr { tag: InstrTag::JumpRel, data, reg0,  .. } => {
+                    let amount = unsafe { reg0.assume_init().ip_offset } as usize;
+                    if data & 1 == 0 {
                         if let Some(last_node) = last_node {
                             graph.add_edge(last_node, node, ReachReason::Continue);
                         }
@@ -231,7 +232,7 @@ impl VMExec {
 
                     jumps.push((node, loc + amount + 1, true));
                 },
-                HLInstr::JumpLine(_) => {
+                Instr { tag: InstrTag::JumpLine, .. } => {
                     if let Some(last_node) = last_node {
                         graph.add_edge(last_node, node, ReachReason::Continue);
                     }
@@ -240,7 +241,7 @@ impl VMExec {
                     }
                     last_node = None;
                 },
-                HLInstr::JumpErr => {
+                Instr { tag: InstrTag::JumpErr, .. } => {
                     if let Some(last_node) = last_node {
                         graph.add_edge(last_node, node, ReachReason::Continue);
                     }

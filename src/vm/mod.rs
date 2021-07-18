@@ -6,99 +6,9 @@ use std::fmt::Write;
 use ahash::AHashMap;
 use std::cell::{Cell, UnsafeCell};
 use instr::*;
+use std::mem::MaybeUninit;
 
 const STRING_CAP: usize = 4096;
-
-mod codegen;
-mod instr;
-pub mod analysis;
-
-type Reg = u16;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[repr(transparent)]
-struct NumberReg(Reg);
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[repr(transparent)]
-struct StringReg(Reg);
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[repr(transparent)]
-struct ValueReg(Reg);
-
-type Line = u8;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-enum AnyReg {
-    Number(NumberReg),
-    String(StringReg),
-    Value(ValueReg),
-}
-
-impl From<NumberReg> for AnyReg {
-    fn from(reg: NumberReg) -> Self {
-        AnyReg::Number(reg)
-    }
-}
-
-impl From<StringReg> for AnyReg {
-    fn from(reg: StringReg) -> Self {
-        AnyReg::String(reg)
-    }
-}
-
-impl From<ValueReg> for AnyReg {
-    fn from(reg: ValueReg) -> Self {
-        AnyReg::Value(reg)
-    }
-}
-
-impl AnyReg {
-    fn into_val(self, vm: &mut VMExec) -> ValueReg {
-        match self {
-            AnyReg::Number(arg) => {
-                let out = vm.new_val_reg(Value::Number(Number::ZERO));
-                vm.code.push(HLInstr::MoveNV { arg, out });
-                out
-            },
-            AnyReg::String(arg) => {
-                let out = vm.new_val_reg(Value::Number(Number::ZERO));
-                vm.code.push(HLInstr::MoveSV { arg, out });
-                out
-            },
-            AnyReg::Value(arg) => arg,
-        }
-    }
-
-    fn into_num(self, vm: &mut VMExec) -> NumberReg {
-        let arg = match self {
-            AnyReg::Number(arg) => return arg,
-            AnyReg::String(_) => self.into_val(vm),
-            AnyReg::Value(arg) => arg,
-        };
-        let out = vm.new_num_reg(Number::ZERO);
-        vm.code.push(HLInstr::MoveVN { arg, out });
-        vm.code.push(HLInstr::JumpErr);
-        out
-    }
-
-    fn into_bool(self, vm: &mut VMExec) -> NumberReg {
-        match self {
-            AnyReg::Number(arg) => {
-                let out = vm.new_num_reg(Number::ZERO);
-                vm.code.push(HLInstr::BoolN { arg, out });
-                out
-            },
-            AnyReg::String(_) => vm.new_num_reg(Number::ONE),
-            AnyReg::Value(arg) => {
-                let out = vm.new_num_reg(Number::ZERO);
-                vm.code.push(HLInstr::BoolV { arg, out });
-                out
-            },
-        }
-    }
-}
 
 macro_rules! unop {
     ($self:ident, $arg:ident, $out:ident, $f:ident, $e1:expr, $e2:expr $(, )?) => { {
@@ -172,9 +82,100 @@ macro_rules! cmp {
     } };
 }
 
+mod codegen;
+mod instr;
+pub mod analysis;
+
+type Reg = u16;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[repr(transparent)]
+struct NumberReg(Reg);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[repr(transparent)]
+struct StringReg(Reg);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[repr(transparent)]
+struct ValueReg(Reg);
+
+type Line = u8;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+enum AnyReg {
+    Number(NumberReg),
+    String(StringReg),
+    Value(ValueReg),
+}
+
+impl From<NumberReg> for AnyReg {
+    fn from(reg: NumberReg) -> Self {
+        AnyReg::Number(reg)
+    }
+}
+
+impl From<StringReg> for AnyReg {
+    fn from(reg: StringReg) -> Self {
+        AnyReg::String(reg)
+    }
+}
+
+impl From<ValueReg> for AnyReg {
+    fn from(reg: ValueReg) -> Self {
+        AnyReg::Value(reg)
+    }
+}
+
+impl AnyReg {
+    fn into_val(self, vm: &mut VMExec) -> ValueReg {
+        match self {
+            AnyReg::Number(arg) => {
+                let out = vm.new_val_reg(Value::Number(Number::ZERO));
+                vm.code.push(Instr::move_nv(arg, out));
+                out
+            },
+            AnyReg::String(arg) => {
+                let out = vm.new_val_reg(Value::Number(Number::ZERO));
+                vm.code.push(Instr::move_sv(arg, out));
+                out
+            },
+            AnyReg::Value(arg) => arg,
+        }
+    }
+
+    fn into_num(self, vm: &mut VMExec) -> NumberReg {
+        let arg = match self {
+            AnyReg::Number(arg) => return arg,
+            AnyReg::String(_) => self.into_val(vm),
+            AnyReg::Value(arg) => arg,
+        };
+        let out = vm.new_num_reg(Number::ZERO);
+        vm.code.push(Instr::move_vn(arg, out));
+        vm.code.push(Instr::jump_err());
+        out
+    }
+
+    fn into_bool(self, vm: &mut VMExec) -> NumberReg {
+        match self {
+            AnyReg::Number(arg) => {
+                let out = vm.new_num_reg(Number::ZERO);
+                vm.code.push(Instr::bool_n(arg, out));
+                out
+            },
+            AnyReg::String(_) => vm.new_num_reg(Number::ONE),
+            AnyReg::Value(arg) => {
+                let out = vm.new_num_reg(Number::ZERO);
+                vm.code.push(Instr::bool_v(arg, out));
+                out
+            },
+        }
+    }
+}
+
 #[derive(Debug, Default)]
 pub struct VMExec {
-    code: Vec<HLInstr>,
+    code: Vec<Instr>,
     numbers: Vec<UnsafeCell<Number>>,
     strings: Vec<UnsafeCell<YString>>,
     values: Vec<UnsafeCell<Value>>,
@@ -185,6 +186,7 @@ pub struct VMExec {
     globals: AHashMap<String, AnyReg>,
     string_buffer: UnsafeCell<YString>,
     runtime_err_flag: Cell<bool>,
+    halt_flag: bool,
 }
 
 impl VMExec {
@@ -209,6 +211,7 @@ impl VMExec {
     #[inline]
     fn set_next_line(&mut self, line: usize) {
         self.next_instr = self.line_starts[line];
+        self.halt_flag = true;
     }
 
     fn set_next_instr(&mut self) {
@@ -287,445 +290,6 @@ impl VMExec {
 
     unsafe fn get_buffer<'a>(&'a self) -> &'a mut YString {
         &mut *self.string_buffer.get()
-    }
-
-    fn line_start(&mut self, line: Line) {
-        firestorm::profile_method!("line_start");
-        self.cur_line = line;
-        self.line_stats[line as usize] += 1;
-        self.set_next_instr();
-    }
-
-    fn jump_rel(&mut self, amount: usize, condition: Option<NumberReg>) {
-        firestorm::profile_method!("jump_rel");
-        if let Some(condition) = condition {
-            // SAFE: only one ref taken
-            if unsafe { self.num_mut(condition).as_bool() } {
-                self.next_instr += amount;
-            } else {
-                self.set_next_instr();
-            }
-        } else {
-            self.next_instr += amount;
-        }
-    }
-
-    fn jump_line(&mut self, reg: NumberReg) {
-        firestorm::profile_method!("jump_line");
-        // SAFE: only one ref taken
-        let result = unsafe { self.num_mut(reg).as_f32() };
-        let next_line = (result.floor() as usize).clamp(1, NUM_LINES) - 1;
-        self.set_next_line(next_line);
-    }
-
-    fn move_sv(&mut self, arg: StringReg, out: ValueReg) {
-        firestorm::profile_method!("move_sv");
-        // SAFE: all registers are guaranteed not to alias
-        let s = unsafe { self.str_mut(arg) };
-        let value = unsafe { self.val_mut(out) };
-        if let Value::Str(old) = value {
-            old.clone_from(s);
-        } else {
-            *value = Value::Str(s.clone());
-        }
-        self.set_next_instr();
-    }
-
-    fn move_nv(&mut self, arg: NumberReg, out: ValueReg) {
-        firestorm::profile_method!("move_nv");
-        // SAFE: all registers are guaranteed not to alias
-        *unsafe { self.val_mut(out) } = Value::Number(*unsafe { self.num_mut(arg) });
-        self.set_next_instr();
-    }
-
-    fn move_vv(&mut self, arg: ValueReg, out: ValueReg) {
-        firestorm::profile_method!("move_vv");
-        if arg != out {
-            // SAFE: all registers are guaranteed not to alias
-            unsafe { self.val_mut(out).clone_from(self.val_mut(arg)) };
-        }
-        self.set_next_instr();
-    }
-
-    fn move_vs(&mut self, arg: ValueReg, out: StringReg) {
-        firestorm::profile_method!("move_vs");
-        let out = if let Value::Str(s) = unsafe { self.val_mut(arg) } {
-            unsafe { self.str_mut(out).clone_from(s) };
-            false
-        } else {
-            true
-        };
-        self.set_next_instr();
-        self.runtime_err_flag.set(out);
-    }
-
-    fn move_vn(&mut self, arg: ValueReg, out: NumberReg) {
-        firestorm::profile_method!("move_vn");
-        let out = if let Value::Number(n) = unsafe { self.val_mut(arg) } {
-            unsafe { *self.num_mut(out) = *n };
-            false
-        } else {
-            true
-        };
-        self.set_next_instr();
-        self.runtime_err_flag.set(out);
-    }
-
-    fn add_s(&mut self, arg1: StringReg, arg2: StringReg, out: StringReg) {
-        firestorm::profile_method!("add_s");
-        binop!(self, arg1, arg2, out, str_mut,
-            *arg1 = YString(arg1.repeat(2)),
-            *arg1 += arg2,
-            { out.clone_from(arg1); *out += arg1 },
-            { out.clone_from(arg1); *out += arg2 },
-        );
-    }
-
-    fn add_n(&mut self, arg1: NumberReg, arg2: NumberReg, out: NumberReg) {
-        firestorm::profile_method!("add_n");
-        binop!(self, arg1, arg2, out, num_mut,
-            *arg1 += *arg1,
-            *arg1 += *arg2,
-            *out = *arg1 + *arg1,
-            *out = *arg1 + *arg2,
-        );
-    }
-
-    fn add_v(&mut self, arg1: ValueReg, arg2: ValueReg, out: ValueReg) {
-        firestorm::profile_method!("add_v");
-        binop!(self, arg1, arg2, out, val_mut,
-            match arg1 {
-                Value::Number(n) => *n += *n,
-                Value::Str(s) => *s = YString(s.repeat(2)),
-            },
-            arg1.add_assign(arg2, unsafe { self.get_buffer() }),
-            { out.clone_from(arg1); out.add_assign(arg1, unsafe { self.get_buffer() }) },
-            { out.clone_from(arg1); out.add_assign(arg2, unsafe { self.get_buffer() }) },
-        );
-    }
-
-    fn sub_s(&mut self, arg1: StringReg, arg2: StringReg, out: StringReg) {
-        firestorm::profile_method!("sub_s");
-        binop!(self, arg1, arg2, out, str_mut,
-            *arg1 -= {
-                let buffer = unsafe { self.get_buffer() };
-                buffer.clone_from(arg1);
-                buffer
-            },
-            *arg1 -= arg2,
-            { out.clone_from(arg1); *out -= arg1 },
-            { out.clone_from(arg1); *out -= arg2 },
-        );
-    }
-
-    fn sub_n(&mut self, arg1: NumberReg, arg2: NumberReg, out: NumberReg) {
-        firestorm::profile_method!("sub_n");
-        binop!(self, arg1, arg2, out, num_mut,
-            *arg1 -= *arg1,
-            *arg1 -= *arg2,
-            *out = *arg1 - *arg1,
-            *out = *arg1 - *arg2,
-        );
-    }
-
-    fn sub_v(&mut self, arg1: ValueReg, arg2: ValueReg, out: ValueReg) {
-        firestorm::profile_method!("sub_v");
-        binop!(self, arg1, arg2, out, val_mut,
-            match arg1 {
-                Value::Number(n) => *n -= *n,
-                Value::Str(s) => *s -= {
-                    let buffer = unsafe { self.get_buffer() };
-                    buffer.clone_from(s);
-                    buffer
-                },
-            },
-            arg1.sub_assign(arg2, unsafe { self.get_buffer() }),
-            { out.clone_from(arg1); out.sub_assign(arg1, unsafe { self.get_buffer() }) },
-            { out.clone_from(arg1); out.sub_assign(arg2, unsafe { self.get_buffer() }) },
-        );
-    }
-
-    fn inc_s(&mut self, arg: StringReg, out: StringReg) {
-        firestorm::profile_method!("inc_s");
-        unop!(self, arg, out, str_mut, arg.pre_inc(), arg.post_inc_s(out));
-    }
-
-    fn inc_n(&mut self, arg: NumberReg, out: NumberReg) {
-        firestorm::profile_method!("inc_n");
-        unop!(self, arg, out, num_mut, arg.pre_inc(), *out = arg.post_inc());
-    }
-
-    fn inc_v(&mut self, arg: ValueReg, out: ValueReg) {
-        firestorm::profile_method!("inc_v");
-        unop!(self, arg, out, val_mut, arg.pre_inc(), arg.post_inc(out));
-    }
-
-    fn dec_s(&mut self, arg: StringReg, out: StringReg) {
-        firestorm::profile_method!("dec_s");
-        unop!(self, arg, out, str_mut,
-            self.set_flag_err_res(arg.pre_dec()),
-            self.set_flag_err_res(arg.post_dec_s(out)),
-        );
-    }
-
-    fn dec_n(&mut self, arg: NumberReg, out: NumberReg) {
-        firestorm::profile_method!("dec_n");
-        unop!(self, arg, out, num_mut, arg.pre_dec(), *out = arg.post_dec());
-    }
-
-    fn dec_v(&mut self, arg: ValueReg, out: ValueReg) {
-        firestorm::profile_method!("dec_v");
-        unop!(self, arg, out, val_mut,
-            self.set_flag_err_res(arg.pre_dec()),
-            self.set_flag_err_res(arg.post_dec(out)),
-        );
-    }
-
-    fn mul(&mut self, arg1: NumberReg, arg2: NumberReg, out: NumberReg) {
-        firestorm::profile_method!("mul");
-        binop!(self, arg1, arg2, out, num_mut,
-            *arg1 *= *arg1,
-            *arg1 *= *arg2,
-            *out = *arg1 * *arg1,
-            *out = *arg1 * *arg2,
-        );
-    }
-
-    fn div(&mut self, arg1: NumberReg, arg2: NumberReg, out: NumberReg) {
-        firestorm::profile_method!("div");
-        binop!(self, arg1, arg2, out, num_mut,
-            self.set_flag_err_res(arg1.div_assign(arg1.clone())),
-            self.set_flag_err_res(arg1.div_assign(arg2.clone())),
-            self.set_flag_err_res_set(*arg1 / *arg1, out),
-            self.set_flag_err_res_set(*arg1 / *arg2, out),
-        );
-    }
-
-    fn mod_instr(&mut self, arg1: NumberReg, arg2: NumberReg, out: NumberReg) {
-        firestorm::profile_method!("mod");
-        binop!(self, arg1, arg2, out, num_mut,
-            self.set_flag_err_res(arg1.rem_assign(arg1.clone())),
-            self.set_flag_err_res(arg1.rem_assign(arg2.clone())),
-            self.set_flag_err_res_set(*arg1 % *arg1, out),
-            self.set_flag_err_res_set(*arg1 % *arg2, out),
-        );
-    }
-
-    fn pow(&mut self, arg1: NumberReg, arg2: NumberReg, out: NumberReg) {
-        firestorm::profile_method!("pow");
-        binop!(self, arg1, arg2, out, num_mut,
-            arg1.pow_assign(arg1.clone()),
-            arg1.pow_assign(arg2.clone()),
-            *out = *arg1 * *arg1,
-            *out = *arg1 * *arg2,
-        );
-    }
-
-    fn abs(&mut self, arg: NumberReg, out: NumberReg) {
-        firestorm::profile_method!("abs");
-        unop_num!(self, arg, out, arg.abs());
-    }
-
-    fn fact(&mut self, arg: NumberReg, out: NumberReg) {
-        firestorm::profile_method!("fact");
-        unop_num!(self, arg, out, arg.fact());
-    }
-
-    fn sqrt(&mut self, arg: NumberReg, out: NumberReg) {
-        firestorm::profile_method!("sqrt");
-        unop_num!(self, arg, out, arg.sqrt());
-    }
-
-    fn sin(&mut self, arg: NumberReg, out: NumberReg) {
-        firestorm::profile_method!("sin");
-        unop_num!(self, arg, out, arg.sin());
-    }
-
-    fn cos(&mut self, arg: NumberReg, out: NumberReg) {
-        firestorm::profile_method!("cos");
-        unop_num!(self, arg, out, arg.cos());
-    }
-
-    fn tan(&mut self, arg: NumberReg, out: NumberReg) {
-        firestorm::profile_method!("tan");
-        unop_num!(self, arg, out, arg.tan());
-    }
-
-    fn asin(&mut self, arg: NumberReg, out: NumberReg) {
-        firestorm::profile_method!("asin");
-        unop_num!(self, arg, out, arg.asin());
-    }
-
-    fn acos(&mut self, arg: NumberReg, out: NumberReg) {
-        firestorm::profile_method!("acos");
-        unop_num!(self, arg, out, arg.acos());
-    }
-
-    fn atan(&mut self, arg: NumberReg, out: NumberReg) {
-        firestorm::profile_method!("atan");
-        unop_num!(self, arg, out, arg.atan());
-    }
-
-    fn neg(&mut self, arg: NumberReg, out: NumberReg) {
-        firestorm::profile_method!("neg");
-        unop_num!(self, arg, out, -arg);
-    }
-
-    fn not(&mut self, arg: NumberReg, out: NumberReg) {
-        firestorm::profile_method!("not");
-        unop_num!(self, arg, out, !arg);
-    }
-
-    fn and(&mut self, arg1: NumberReg, arg2: NumberReg, out: NumberReg) {
-        firestorm::profile_method!("and");
-        let arg1 = unsafe { self.num_ref(arg1).as_bool() };
-        let arg2 = unsafe { self.num_ref(arg2).as_bool() };
-        *unsafe { self.num_mut(out) } = (arg1 && arg2).into();
-        self.set_next_instr();
-    }
-
-    fn or(&mut self, arg1: NumberReg, arg2: NumberReg, out: NumberReg) {
-        firestorm::profile_method!("or");
-        let arg1 = unsafe { self.num_ref(arg1).as_bool() };
-        let arg2 = unsafe { self.num_ref(arg2).as_bool() };
-        *unsafe { self.num_mut(out) } = (arg1 || arg2).into();
-        self.set_next_instr();
-    }
-
-    fn eq(&mut self, arg1: ValueReg, arg2: ValueReg, out: NumberReg) {
-        firestorm::profile_method!("eq");
-        cmp!(self, arg1, arg2, out, true, arg1 == arg2);
-    }
-
-    fn le(&mut self, arg1: ValueReg, arg2: ValueReg, out: NumberReg) {
-        firestorm::profile_method!("le");
-        cmp!( self, arg1, arg2, out, true, arg1.le(arg2, unsafe { self.get_buffer() }));
-    }
-
-    fn lt(&mut self, arg1: ValueReg, arg2: ValueReg, out: NumberReg) {
-        firestorm::profile_method!("lt");
-        cmp!( self, arg1, arg2, out, false, arg1.lt(arg2, unsafe { self.get_buffer() }));
-    }
-
-    fn bool_n(&mut self, arg: NumberReg, out: NumberReg) {
-        firestorm::profile_method!("bool_n");
-        unop_num!(self, arg, out, arg.as_bool().into());
-    }
-
-    fn bool_v(&mut self, arg: ValueReg, out: NumberReg) {
-        firestorm::profile_method!("bool_v");
-        let result = unsafe { self.val_ref(arg).as_bool() };
-        *unsafe { self.num_mut(out) } = result.into();
-        self.set_next_instr();
-    }
-
-    fn stringify_n(&mut self, arg: NumberReg, out: StringReg) {
-        firestorm::profile_method!("stringify_n");
-        let arg = unsafe { self.num_ref(arg) };
-        let out = unsafe { self.str_mut(out) };
-        out.clear();
-        write!(out, "{}", arg).unwrap();
-        self.set_next_instr();
-    }
-
-    fn stringify_v(&mut self, arg: ValueReg, out: StringReg) {
-        firestorm::profile_method!("stringify_v");
-        let out = unsafe { self.str_mut(out) };
-        match unsafe { self.val_ref(arg) } {
-            Value::Number(arg) => { 
-                out.clear();
-                write!(out, "{}", arg).unwrap();
-            },
-            Value::Str(arg) => {
-                out.clone_from(arg);
-            },
-        }
-        self.set_next_instr();
-    }
-
-    #[inline]
-    fn set_flag_err_res<U>(&self, res: Result<(), U>) {
-        self.runtime_err_flag.set(res.is_err());
-    }
-
-    #[inline]
-    fn set_flag_err_res_set<T, U>(&self, res: Result<T, U>, out: &mut T) {
-        self.runtime_err_flag.set(if let Ok(t) = res {
-            *out = t;
-            false
-        } else {
-            true
-        });
-    }
-
-    fn step_aux(&mut self) -> bool {
-        firestorm::profile_method!("step_aux");
-        match self.code[self.next_instr] {
-            HLInstr::LineStart(line) => self.line_start(line),
-            HLInstr::JumpRel { amount, condition } => self.jump_rel(amount, condition),
-            HLInstr::JumpErr => if self.runtime_err_flag.get() {
-                self.runtime_err();
-                return true;
-            } else {
-                self.set_next_instr()
-            },
-            HLInstr::JumpLine(reg) => {
-                self.jump_line(reg);
-                return true;
-            },
-            HLInstr::MoveSV { arg, out } => self.move_sv(arg, out),
-            HLInstr::MoveNV { arg, out } => self.move_nv(arg, out),
-            HLInstr::MoveVV { arg, out } => self.move_vv(arg, out),
-            HLInstr::MoveVS { arg, out } => self.move_vs(arg, out),
-            HLInstr::MoveVN { arg, out } => self.move_vn(arg, out),
-            HLInstr::StringifyN { arg, out } => self.stringify_n(arg, out),
-            HLInstr::StringifyV { arg, out } => self.stringify_v(arg, out),
-            HLInstr::AddS { arg1, arg2, out } => self.add_s(arg1, arg2, out),
-            HLInstr::AddN { arg1, arg2, out } => self.add_n(arg1, arg2, out),
-            HLInstr::AddV { arg1, arg2, out } => self.add_v(arg1, arg2, out),
-            HLInstr::SubS { arg1, arg2, out } => self.sub_s(arg1, arg2, out),
-            HLInstr::SubN { arg1, arg2, out } => self.sub_n(arg1, arg2, out),
-            HLInstr::SubV { arg1, arg2, out } => self.sub_v(arg1, arg2, out),
-            HLInstr::IncS { arg, out } => self.inc_s(arg, out),
-            HLInstr::IncN { arg, out } => self.inc_n(arg, out),
-            HLInstr::IncV { arg, out } => self.inc_v(arg, out),
-            HLInstr::DecS { arg, out } => self.dec_s(arg, out),
-            HLInstr::DecN { arg, out } => self.dec_n(arg, out),
-            HLInstr::DecV { arg, out } => self.dec_v(arg, out),
-            HLInstr::Mul { arg1, arg2, out } => self.mul(arg1, arg2, out),
-            HLInstr::Div { arg1, arg2, out } => self.div(arg1, arg2, out),
-            HLInstr::Mod { arg1, arg2, out } => self.mod_instr(arg1, arg2, out),
-            HLInstr::Pow { arg1, arg2, out } => self.pow(arg1, arg2, out),
-            HLInstr::Abs { arg, out } => self.abs(arg, out),
-            HLInstr::Fact { arg, out } => self.fact(arg, out),
-            HLInstr::Sqrt { arg, out } => self.sqrt(arg, out),
-            HLInstr::Sin { arg, out } => self.sin(arg, out),
-            HLInstr::Cos { arg, out } => self.cos(arg, out),
-            HLInstr::Tan { arg, out } => self.tan(arg, out),
-            HLInstr::Asin { arg, out } => self.asin(arg, out),
-            HLInstr::Acos { arg, out } => self.acos(arg, out),
-            HLInstr::Atan { arg, out } => self.atan(arg, out),
-            HLInstr::Neg { arg, out } => self.neg(arg, out),
-            HLInstr::Not { arg, out } => self.not(arg, out),
-            HLInstr::And { arg1, arg2, out } => self.and(arg1, arg2, out),
-            HLInstr::Or { arg1, arg2, out } => self.or(arg1, arg2, out),
-            HLInstr::Eq { arg1, arg2, out } => self.eq(arg1, arg2, out),
-            HLInstr::Le { arg1, arg2, out } => self.le(arg1, arg2, out),
-            HLInstr::Lt { arg1, arg2, out } => self.lt(arg1, arg2, out),
-            HLInstr::BoolN { arg, out } => self.bool_n(arg, out),
-            HLInstr::BoolV { arg, out } => self.bool_v(arg, out),
-        };
-        false
-    }
-
-    pub fn step(&mut self) {
-        firestorm::profile_method!("step");
-        loop {
-            let end_of_line = self.step_aux();
-            if end_of_line || matches!(self.code[self.next_instr], HLInstr::LineStart(_)) {
-                break;
-            }
-        }
     }
 
     pub fn globals<'a>(&'a self) -> impl Iterator<Item=(&'a str, Value)> + 'a {

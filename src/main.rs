@@ -84,7 +84,7 @@ fn main() {
     if firestorm::enabled() {
         firestorm::bench("./flames/", fs_main).unwrap();
     } else {
-        const NUM_LINES: usize = 10_000_000;
+        const NUM_LINES: usize = 100_000_000;
         set_core_affinity();
         let script = script();
         let script: parser::cst::Script = script.try_into().unwrap();
@@ -108,6 +108,10 @@ fn main() {
                 time_taken,
                 lines_per_sec,
             );
+            println!("globals as of right now");
+            for (name, val) in vm.globals() {
+                println!("{}: {}", name, val);
+            }
         }
     }
 }
