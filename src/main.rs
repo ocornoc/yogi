@@ -57,7 +57,7 @@ fn main() {
         let mut vm = vm::VMExec::from(script);
         let mut graph = vm.control_flow_graph();
         graph.clean_up();
-        println!("DFG:\n{}", graph.dfg(&vm));
+        //println!("DFG:\n{}", graph.dfg(&vm));
         loop {
             let start = Instant::now();
             for _ in 0..NUM_LINES {
