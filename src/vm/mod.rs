@@ -6,7 +6,7 @@ use std::fmt::Write;
 use ahash::AHashMap;
 use std::cell::{Cell, UnsafeCell};
 
-const STRING_CAP: usize = 2_usize.pow(16);
+const STRING_CAP: usize = 4096;
 
 mod codegen;
 pub mod analysis;
