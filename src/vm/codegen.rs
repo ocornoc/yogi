@@ -256,7 +256,7 @@ fn expression_codegen(vm: &mut VMExec, data: &mut CodegenData, expr: Expr) -> An
             vm.code.push(match binop {
                 Binop::Mul => HLInstr::Mul { arg1, arg2, out },
                 Binop::Div => HLInstr::Div { arg1, arg2, out },
-                Binop::Mod => HLInstr::Mod { arg1, arg2, out },
+                Binop::Rem => HLInstr::Mod { arg1, arg2, out },
                 Binop::Pow => HLInstr::Pow { arg1, arg2, out },
                 _ => unsafe { unreachable() },
             });

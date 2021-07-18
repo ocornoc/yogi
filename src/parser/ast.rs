@@ -63,7 +63,7 @@ impl pre_ast::Binop {
             pre_ast::Binop::Sub if prec <= precedence::ADD_SUB => Some(Binop::Sub),
             pre_ast::Binop::Mul if prec <= precedence::MUL_DIV => Some(Binop::Mul),
             pre_ast::Binop::Div if prec <= precedence::MUL_DIV => Some(Binop::Div),
-            pre_ast::Binop::Mod if prec <= precedence::MUL_DIV => Some(Binop::Mod),
+            pre_ast::Binop::Rem if prec <= precedence::MUL_DIV => Some(Binop::Rem),
             pre_ast::Binop::Pow if prec <= precedence::POW => Some(Binop::Pow),
             pre_ast::Binop::Lt if prec <= precedence::CMP => Some(Binop::Lt),
             pre_ast::Binop::Le if prec <= precedence::CMP => Some(Binop::Le),
@@ -108,7 +108,7 @@ pub enum Binop {
     Sub,
     Mul,
     Div,
-    Mod,
+    Rem,
     Pow,
     Lt,
     Le,
@@ -124,7 +124,7 @@ impl Binop {
     fn prec(&self) -> Precedence {
         match self {
             Binop::Add | Binop::Sub => precedence::ADD_SUB,
-            Binop::Mul | Binop::Div | Binop::Mod => precedence::MUL_DIV,
+            Binop::Mul | Binop::Div | Binop::Rem => precedence::MUL_DIV,
             Binop::Pow => precedence::POW,
             Binop::Lt | Binop::Le | Binop::Eq | Binop::Ge | Binop::Gt | Binop::Ne =>
                 precedence::CMP,

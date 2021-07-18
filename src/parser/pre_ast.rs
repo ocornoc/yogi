@@ -13,7 +13,7 @@ pub enum Binop {
     Sub,
     Mul,
     Div,
-    Mod,
+    Rem,
     Pow,
     Lt,
     Le,
@@ -30,7 +30,7 @@ pub enum AssignStyle {
     Sub,
     Mul,
     Div,
-    Mod,
+    Rem,
     Pow,
 }
 
@@ -104,7 +104,7 @@ impl Line {
                     '-' => Fragment::Assign(AssignStyle::Sub),
                     '*' => Fragment::Assign(AssignStyle::Mul),
                     '/' => Fragment::Assign(AssignStyle::Div),
-                    '%' => Fragment::Assign(AssignStyle::Mod),
+                    '%' => Fragment::Assign(AssignStyle::Rem),
                     '^' => Fragment::Assign(AssignStyle::Pow),
                     '!' => Fragment::Binop(Binop::Ne),
                     _ => {
@@ -136,7 +136,7 @@ impl Line {
             }),
             '*' => Ok(Fragment::Binop(Binop::Mul)),
             '/' => Ok(Fragment::Binop(Binop::Div)),
-            '%' => Ok(Fragment::Binop(Binop::Mod)),
+            '%' => Ok(Fragment::Binop(Binop::Rem)),
             '^' => Ok(Fragment::Binop(Binop::Pow)),
             '!' => Ok(Fragment::Unop(Unop::Fact)),
             '=' => Ok(Fragment::Assign(AssignStyle::Normal)),
