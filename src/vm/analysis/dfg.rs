@@ -5,7 +5,7 @@ type Idx = u16;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Node {
-    reg: AnyReg,
+    pub(in crate::vm) reg: AnyReg,
 }
 
 impl Display for Node {
