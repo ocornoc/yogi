@@ -316,9 +316,19 @@ mod tests {
         script.into()
     }
 
+    fn test(src: &str, lines: usize) {
+        let mut vm = make_script(src);
+        for _ in 0..lines {
+            vm.step();
+        }
+        let (name, output) = vm.globals().next().unwrap();
+        debug_assert_eq!(name.to_ascii_lowercase(), "output");
+        debug_assert_eq!(output, Value::Str("ok".to_string().into()));
+    }
+
     #[test]
     fn string_test() {
-        static TEST: &str = "\
+        test("\
             num=1 if \"\" then goto 19 end num++\n\
             if \"abc\" then goto 19 end num++\n\
             if \"1\" then goto 19 end num++\n\
@@ -339,13 +349,6 @@ mod tests {
             :OUTPUT=\"ok\" goto20\n\
             :output=\"Failed test #\"+num\n\
             goto20\n\
-        ";
-        let mut vm = make_script(TEST);
-        for _ in 0..30 {
-            vm.step();
-        }
-        let (name, output) = vm.globals().next().unwrap();
-        debug_assert_eq!(name.to_ascii_lowercase(), "output");
-        debug_assert_eq!(output, Value::Str("ok".to_string().into()));
+        ", 30);
     }
 }
