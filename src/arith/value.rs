@@ -158,7 +158,7 @@ impl Value {
     pub fn as_bool(&self) -> bool {
         match self {
             Value::Number(n) => n.as_bool(),
-            Value::Str(_) => true,
+            Value::Str(_) => false,
         }
     }
 }
@@ -205,7 +205,19 @@ impl Not for Value {
         if let Value::Number(n) = self {
             !n
         } else {
-            Number::ZERO
+            Number::ONE
+        }
+    }
+}
+
+impl Not for &'_ Value {
+    type Output = Number;
+
+    fn not(self) -> Self::Output {
+        if let &Value::Number(n) = self {
+            !n
+        } else {
+            Number::ONE
         }
     }
 }

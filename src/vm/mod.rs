@@ -163,7 +163,7 @@ impl AnyReg {
                 vm.code.push(Instr::bool_n(arg, out));
                 out
             },
-            AnyReg::String(_) => vm.new_num_reg(Number::ONE),
+            AnyReg::String(_) => vm.new_num_reg(Number::ZERO),
             AnyReg::Value(arg) => {
                 let out = vm.new_num_reg(Number::ZERO);
                 vm.code.push(Instr::bool_v(arg, out));
