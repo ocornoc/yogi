@@ -591,8 +591,8 @@ impl Instr {
         instr
     }
 
-    pub fn set_line_end(&mut self, start: bool) {
-        if start {
+    pub fn set_line_end(&mut self, last: bool) {
+        if last {
             self.data |= 0b0000_0001;
         } else {
             self.data &= !0b0000_0001;

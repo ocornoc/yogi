@@ -9,13 +9,16 @@ impl From<Script> for VMExec {
     fn from(script: Script) -> Self {
         let mut vm = VMExec::default();
         let mut data = CodegenData::default();
-        for (line_num, line) in IntoIter::new(script.0).enumerate() {
+        for (line_num, mut line) in IntoIter::new(script.0).enumerate() {
             vm.line_starts[line_num] = vm.code.len();
             vm.code.push(Instr::line_start(line_num as u8));
-            for statement in line.0 {
-                vm.codegen_statement(statement, &mut data);
+            if let Some(last) = line.0.pop() {
+                for statement in line.0 {
+                    vm.codegen_statement(statement, &mut data, false);
+                }
+                vm.codegen_statement(last, &mut data, true);
+                vm.code.last_mut().unwrap().set_line_end(true);
             }
-            vm.code.last_mut().unwrap().set_line_end(true);
         }
         vm.globals.extend(data.var_map
             .into_iter()
@@ -27,7 +30,7 @@ impl From<Script> for VMExec {
 }
 
 impl VMExec {
-    fn codegen_statement(&mut self, statement: Statement, data: &mut CodegenData) {
+    fn codegen_statement(&mut self, statement: Statement, data: &mut CodegenData, last: bool) {
         match statement {
             Statement::Assign(var, style, mut expr) =>
                 if let AnyReg::Value(out) = var_codegen(self, data, var.clone()) {
@@ -46,16 +49,17 @@ impl VMExec {
                 let cond_len = self.code.len();
                 self.code.push(Instr::jump_rel(0, None));
                 for statement in e {
-                    self.codegen_statement(statement, data);
+                    self.codegen_statement(statement, data, false);
                 }
                 let e_len = self.code.len();
                 self.code.push(Instr::jump_rel(0, None));
                 for statement in t {
-                    self.codegen_statement(statement, data);
+                    self.codegen_statement(statement, data, false);
                 }
                 let t_len = self.code.len();
                 self.code[cond_len] = Instr::jump_rel(e_len - cond_len + 1, Some(cond));
                 self.code[e_len] = Instr::jump_rel(t_len - e_len + 1, None);
+                self.code[e_len].set_line_end(last);
             }
             Statement::Goto(expr) => {
                 let num = match expression_codegen(self, data, expr) {
