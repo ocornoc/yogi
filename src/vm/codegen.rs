@@ -144,34 +144,34 @@ fn expression_codegen(vm: &mut VMExec, data: &mut CodegenData, expr: Expr) -> An
         Expr::PostInc(var) => match var_codegen(vm, data, var) {
             AnyReg::Number(arg) => {
                 let out = vm.new_num_reg(Number::ZERO);
-                vm.code.push(Instr::inc_n(arg, arg));
+                vm.code.push(Instr::inc_n(arg, out));
                 AnyReg::Number(out)
             },
             AnyReg::String(arg) => {
                 let out = vm.new_string_reg(YString(String::with_capacity(STRING_CAP)));
-                vm.code.push(Instr::inc_s(arg, arg));
+                vm.code.push(Instr::inc_s(arg, out));
                 AnyReg::String(out)
             },
             AnyReg::Value(arg) => {
                 let out = vm.new_val_reg(Value::default());
-                vm.code.push(Instr::inc_v(arg, arg));
+                vm.code.push(Instr::inc_v(arg, out));
                 AnyReg::Value(out)
             },
         },
         Expr::PostDec(var) => match var_codegen(vm, data, var) {
             AnyReg::Number(arg) => {
                 let out = vm.new_num_reg(Number::ZERO);
-                vm.code.push(Instr::dec_n(arg, arg));
+                vm.code.push(Instr::dec_n(arg, out));
                 AnyReg::Number(out)
             },
             AnyReg::String(arg) => {
                 let out = vm.new_string_reg(YString(String::with_capacity(STRING_CAP)));
-                vm.code.push(Instr::dec_s(arg, arg));
+                vm.code.push(Instr::dec_s(arg, out));
                 AnyReg::String(out)
             },
             AnyReg::Value(arg) => {
                 let out = vm.new_val_reg(Value::default());
-                vm.code.push(Instr::dec_v(arg, arg));
+                vm.code.push(Instr::dec_v(arg, out));
                 AnyReg::Value(out)
             },
         },
@@ -185,23 +185,23 @@ fn expression_codegen(vm: &mut VMExec, data: &mut CodegenData, expr: Expr) -> An
             let arg = expression_codegen(vm, data, *expr).into_num(vm);
             let out = vm.new_num_reg(Number::ZERO);
             vm.code.push(match unop {
-                Unop::Abs => Instr::abs(arg, arg),
-                Unop::Sqrt => Instr::sqrt(arg, arg),
-                Unop::Sin => Instr::sin(arg, arg),
-                Unop::Cos => Instr::cos(arg, arg),
-                Unop::Tan => Instr::tan(arg, arg),
-                Unop::Asin => Instr::asin(arg, arg),
-                Unop::Acos => Instr::acos(arg, arg),
-                Unop::Atan => Instr::atan(arg, arg),
-                Unop::Fact => Instr::fact(arg, arg),
-                Unop::Neg => Instr::neg(arg, arg),
+                Unop::Abs => Instr::abs(arg, out),
+                Unop::Sqrt => Instr::sqrt(arg, out),
+                Unop::Sin => Instr::sin(arg, out),
+                Unop::Cos => Instr::cos(arg, out),
+                Unop::Tan => Instr::tan(arg, out),
+                Unop::Asin => Instr::asin(arg, out),
+                Unop::Acos => Instr::acos(arg, out),
+                Unop::Atan => Instr::atan(arg, out),
+                Unop::Fact => Instr::fact(arg, out),
+                Unop::Neg => Instr::neg(arg, out),
                 Unop::Not => unsafe { unreachable() },
             });
             AnyReg::Number(out)
         },
         Expr::Binop(l, binop@(Binop::Add | Binop::Sub), r) => {
-            let arg1 = expression_codegen(vm, data, *r).into_val(vm);
-            let arg2 = expression_codegen(vm, data, *l).into_val(vm);
+            let arg2 = expression_codegen(vm, data, *r).into_val(vm);
+            let arg1 = expression_codegen(vm, data, *l).into_val(vm);
             let out = vm.new_val_reg(Value::default());
             match binop {
                 Binop::Add => vm.code.push(Instr::add_v(arg1, arg2, out)),
@@ -215,8 +215,8 @@ fn expression_codegen(vm: &mut VMExec, data: &mut CodegenData, expr: Expr) -> An
             binop@(Binop::Eq | Binop::Ne | Binop::Le | Binop::Lt | Binop::Ge | Binop::Gt),
             r,
         ) => {
-            let arg1 = expression_codegen(vm, data, *r).into_val(vm);
-            let arg2 = expression_codegen(vm, data, *l).into_val(vm);
+            let arg2 = expression_codegen(vm, data, *r).into_val(vm);
+            let arg1 = expression_codegen(vm, data, *l).into_val(vm);
             let mut out = vm.new_num_reg(Number::ZERO);
             vm.code.push(match binop {
                 Binop::Eq | Binop::Ne => Instr::eq(arg1, arg2, out),
@@ -234,8 +234,8 @@ fn expression_codegen(vm: &mut VMExec, data: &mut CodegenData, expr: Expr) -> An
             AnyReg::Number(out)
         },
         Expr::Binop(l, binop@(Binop::And | Binop::Or), r) => {
-            let arg1 = expression_codegen(vm, data, *r).into_bool(vm);
-            let arg2 = expression_codegen(vm, data, *l).into_bool(vm);
+            let arg2 = expression_codegen(vm, data, *r).into_bool(vm);
+            let arg1 = expression_codegen(vm, data, *l).into_bool(vm);
             let out = vm.new_num_reg(Number::ZERO);
             vm.code.push(match binop {
                 Binop::And => Instr::and(arg1, arg2, out),
@@ -245,8 +245,8 @@ fn expression_codegen(vm: &mut VMExec, data: &mut CodegenData, expr: Expr) -> An
             AnyReg::Number(out)
         },
         Expr::Binop(l, binop@(Binop::Mul | Binop::Div | Binop::Rem | Binop::Pow), r) => {
-            let arg1 = expression_codegen(vm, data, *r).into_num(vm);
-            let arg2 = expression_codegen(vm, data, *l).into_num(vm);
+            let arg2 = expression_codegen(vm, data, *r).into_num(vm);
+            let arg1 = expression_codegen(vm, data, *l).into_num(vm);
             let out = vm.new_num_reg(Number::ZERO);
             vm.code.push(match binop {
                 Binop::Mul => Instr::mul(arg1, arg2, out),
