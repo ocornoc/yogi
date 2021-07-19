@@ -229,7 +229,6 @@ impl VMExec {
             self.cur_line += 1;
             self.cur_line as usize
         };
-        self.runtime_err_flag.set(false);
         self.set_next_line(line);
     }
 
