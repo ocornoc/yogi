@@ -480,7 +480,6 @@ macro_rules! ctors {
 ctors! {
     line_start (LineStart), line: Line => reg0: line: line;
     jump_err (JumpErr);
-    jump_line (JumpLine), line: NumberReg => reg0: number: line;
     move_sv (MoveSV), string: StringReg, value: ValueReg =>
         reg0: string: string, reg1: value: value;
     move_nv (MoveNV), number: NumberReg, value: ValueReg =>
@@ -575,6 +574,16 @@ impl Instr {
         reg1: MaybeUninit::uninit(),
         reg2: MaybeUninit::uninit(),
     };
+
+    pub fn jump_line(line: NumberReg) -> Self {
+        let mut instr = Instr {
+            tag: InstrTag::JumpLine,
+            reg0: MaybeUninit::new(UnsafeArg { number: line }),
+            ..Self::DEATH
+        };
+        instr.set_jumprel_cond(true);
+        instr
+    }
 
     pub fn jump_rel(amount: usize, condition: Option<NumberReg>) -> Self {
         let mut instr = Instr {
