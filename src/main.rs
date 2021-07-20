@@ -64,13 +64,16 @@ fn main() {
                 vm.step();
             }
             let done = Instant::now();
-            let time_taken = (done - start).as_secs_f32();
+            let dur = done - start;
+            let time_taken = dur.as_secs_f32();
             let lines_per_sec = NUM_LINES as f32 / time_taken;
+            let ns_per_line = dur.as_nanos() as f32 / NUM_LINES as f32;
             println!(
-                "finished execution of {} lines in {}s at a rate of {} lines/sec.",
+                "finished execution of {} lines in {}s at a rate of {} lines/sec ({} ns/line).",
                 NUM_LINES,
                 time_taken,
                 lines_per_sec,
+                ns_per_line,
             );
             println!("globals as of right now");
             for (name, val) in vm.globals() {
