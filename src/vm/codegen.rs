@@ -180,9 +180,9 @@ fn expression_codegen(vm: &mut VMExec, data: &mut CodegenData, expr: Expr) -> An
             },
         },
         Expr::Unop(Unop::Not, expr) => {
-            let arg = expression_codegen(vm, data, *expr).into_bool(vm);
+            let arg = expression_codegen(vm, data, *expr).into_val(vm);
             let out = vm.new_num_reg(Number::ZERO);
-            vm.code.push(Instr::not(arg, arg));
+            vm.code.push(Instr::not_v(arg, out));
             AnyReg::Number(out)
         },
         Expr::Unop(unop, expr) => {
@@ -232,7 +232,7 @@ fn expression_codegen(vm: &mut VMExec, data: &mut CodegenData, expr: Expr) -> An
             });
             if binop == Binop::Ne {
                 let new_out = vm.new_num_reg(Number::ZERO);
-                vm.code.push(Instr::not(out, new_out));
+                vm.code.push(Instr::not_n(out, new_out));
                 out = new_out;
             }
             AnyReg::Number(out)

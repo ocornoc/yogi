@@ -283,9 +283,15 @@ impl VMExec {
         unop_num!(self, arg, out, -arg);
     }
 
-    fn not(&mut self, arg: NumberReg, out: NumberReg) {
-        firestorm::profile_method!("not");
+    fn not_n(&mut self, arg: NumberReg, out: NumberReg) {
+        firestorm::profile_method!("not_n");
         unop_num!(self, arg, out, !arg);
+    }
+
+    fn not_v(&mut self, arg: ValueReg, out: NumberReg) {
+        firestorm::profile_method!("not_v");
+        unsafe { *self.num_mut(out) = !self.val_ref(arg) };
+        self.set_next_instr();
     }
 
     fn and(&mut self, arg1: NumberReg, arg2: NumberReg, out: NumberReg) {
@@ -435,7 +441,8 @@ pub(super) enum InstrTag {
     Neg,
     And,
     Or,
-    Not,
+    NotN,
+    NotV,
     BoolN,
     BoolV,
     Death = u8::MAX,
@@ -556,8 +563,10 @@ ctors! {
         reg0: number: reg0, reg1: number: reg1, reg2: number: out;
     or (Or), reg0: NumberReg, reg1: NumberReg, out: NumberReg =>
         reg0: number: reg0, reg1: number: reg1, reg2: number: out;
-    not (Not), reg0: NumberReg, out: NumberReg =>
+    not_n (NotN), reg0: NumberReg, out: NumberReg =>
         reg0: number: reg0, reg1: number: out;
+    not_v (NotV), reg0: ValueReg, out: NumberReg =>
+        reg0: value: reg0, reg1: number: out;
     bool_n (BoolN), reg0: NumberReg, out: NumberReg =>
         reg0: number: reg0, reg1: number: out;
     bool_v (BoolV), reg0: ValueReg, out: NumberReg =>
@@ -638,18 +647,20 @@ impl Debug for Instr {
 }
 
 macro_rules! jump_table_fn {
-    ($name:ident $(, )? $($if:ident . $un:ident),*) => { {
-        fn f(vm: &mut VMExec, instr: Instr) {
-            vm.$name($(unsafe { instr.$if.assume_init().$un }),*);
-        }
-        f as _
-    } };
+    ($table:ident, $var:ident, $name:ident $(, )? $($if:ident . $un:ident),*) => {
+        $table[InstrTag::$var as usize] = {
+            fn f(vm: &mut VMExec, instr: Instr) {
+                vm.$name($(unsafe { instr.$if.assume_init().$un }),*);
+            }
+            f as _
+        };
+    };
 }
 
 static JUMP_TABLE: [fn(&mut VMExec, Instr); u8::MAX as usize] = {
     let mut table = [death as _; u8::MAX as usize];
-    table[0] = jump_table_fn!(line_start, reg0.line);
-    table[1] = {
+    jump_table_fn!(table, LineStart, line_start, reg0.line);
+    table[InstrTag::JumpRel as usize] = {
         fn f(vm: &mut VMExec, instr: Instr) {
             vm.jump_rel(
                 instr.get_jumprel_cond(),
@@ -659,56 +670,56 @@ static JUMP_TABLE: [fn(&mut VMExec, Instr); u8::MAX as usize] = {
         }
         f as _
     };
-    table[2] = {
+    table[InstrTag::JumpErr as usize] = {
         fn f(vm: &mut VMExec, _: Instr) {
             vm.runtime_err_flag.set(true);
             vm.halt_flag = true;
         }
         f as _
     };
-    table[3] = jump_table_fn!(jump_line, reg0.number);
-    table[4] = jump_table_fn!(move_sv, reg0.string, reg1.value);
-    table[5] = jump_table_fn!(move_nv, reg0.number, reg1.value);
-    table[6] = jump_table_fn!(move_vv, reg0.value, reg1.value);
-    table[7] = jump_table_fn!(move_vs, reg0.value, reg1.string);
-    table[8] = jump_table_fn!(move_vn, reg0.value, reg1.number);
-    table[9] = jump_table_fn!(stringify_n, reg0.number, reg1.string);
-    table[10] = jump_table_fn!(stringify_v, reg0.value, reg1.string);
-    table[11] = jump_table_fn!(add_s, reg0.string, reg1.string, reg2.string);
-    table[12] = jump_table_fn!(add_n, reg0.number, reg1.number, reg2.number);
-    table[13] = jump_table_fn!(add_v, reg0.value, reg1.value, reg2.value);
-    table[14] = jump_table_fn!(sub_s, reg0.string, reg1.string, reg2.string);
-    table[15] = jump_table_fn!(sub_n, reg0.number, reg1.number, reg2.number);
-    table[16] = jump_table_fn!(sub_v, reg0.value, reg1.value, reg2.value);
-    table[17] = jump_table_fn!(mul, reg0.number, reg1.number, reg2.number);
-    table[18] = jump_table_fn!(div, reg0.number, reg1.number, reg2.number);
-    table[19] = jump_table_fn!(rem, reg0.number, reg1.number, reg2.number);
-    table[20] = jump_table_fn!(pow, reg0.number, reg1.number, reg2.number);
-    table[21] = jump_table_fn!(eq, reg0.value, reg1.value, reg2.number);
-    table[22] = jump_table_fn!(le, reg0.value, reg1.value, reg2.number);
-    table[23] = jump_table_fn!(lt, reg0.value, reg1.value, reg2.number);
-    table[24] = jump_table_fn!(inc_s, reg0.string, reg1.string);
-    table[25] = jump_table_fn!(inc_n, reg0.number, reg1.number);
-    table[26] = jump_table_fn!(inc_v, reg0.value, reg1.value);
-    table[27] = jump_table_fn!(dec_s, reg0.string, reg1.string);
-    table[28] = jump_table_fn!(dec_n, reg0.number, reg1.number);
-    table[29] = jump_table_fn!(dec_v, reg0.value, reg1.value);
-    table[30] = jump_table_fn!(and, reg0.number, reg1.number, reg2.number);
-    table[31] = jump_table_fn!(or, reg0.number, reg1.number, reg2.number);
-    table[32] = jump_table_fn!(abs, reg0.number, reg1.number);
-    table[33] = jump_table_fn!(fact, reg0.number, reg1.number);
-    table[34] = jump_table_fn!(sqrt, reg0.number, reg1.number);
-    table[35] = jump_table_fn!(sin, reg0.number, reg1.number);
-    table[36] = jump_table_fn!(cos, reg0.number, reg1.number);
-    table[37] = jump_table_fn!(tan, reg0.number, reg1.number);
-    table[38] = jump_table_fn!(asin, reg0.number, reg1.number);
-    table[39] = jump_table_fn!(acos, reg0.number, reg1.number);
-    table[40] = jump_table_fn!(atan, reg0.number, reg1.number);
-    table[41] = jump_table_fn!(abs, reg0.number, reg1.number);
-    table[42] = jump_table_fn!(neg, reg0.number, reg1.number);
-    table[43] = jump_table_fn!(not, reg0.number, reg1.number);
-    table[44] = jump_table_fn!(bool_n, reg0.number, reg1.number);
-    table[45] = jump_table_fn!(bool_v, reg0.value, reg1.number);
+    jump_table_fn!(table, JumpLine, jump_line, reg0.number);
+    jump_table_fn!(table, MoveSV, move_sv, reg0.string, reg1.value);
+    jump_table_fn!(table, MoveNV, move_nv, reg0.number, reg1.value);
+    jump_table_fn!(table, MoveVV, move_vv, reg0.value, reg1.value);
+    jump_table_fn!(table, MoveVS, move_vs, reg0.value, reg1.string);
+    jump_table_fn!(table, MoveVN, move_vn, reg0.value, reg1.number);
+    jump_table_fn!(table, StringifyN, stringify_n, reg0.number, reg1.string);
+    jump_table_fn!(table, StringifyV, stringify_v, reg0.value, reg1.string);
+    jump_table_fn!(table, AddS, add_s, reg0.string, reg1.string, reg2.string);
+    jump_table_fn!(table, AddN, add_n, reg0.number, reg1.number, reg2.number);
+    jump_table_fn!(table, AddV, add_v, reg0.value, reg1.value, reg2.value);
+    jump_table_fn!(table, SubS, sub_s, reg0.string, reg1.string, reg2.string);
+    jump_table_fn!(table, SubN, sub_n, reg0.number, reg1.number, reg2.number);
+    jump_table_fn!(table, SubV, sub_v, reg0.value, reg1.value, reg2.value);
+    jump_table_fn!(table, Mul, mul, reg0.number, reg1.number, reg2.number);
+    jump_table_fn!(table, Div, div, reg0.number, reg1.number, reg2.number);
+    jump_table_fn!(table, Rem, rem, reg0.number, reg1.number, reg2.number);
+    jump_table_fn!(table, Pow, pow, reg0.number, reg1.number, reg2.number);
+    jump_table_fn!(table, Eq, eq, reg0.value, reg1.value, reg2.number);
+    jump_table_fn!(table, Le, le, reg0.value, reg1.value, reg2.number);
+    jump_table_fn!(table, Lt, lt, reg0.value, reg1.value, reg2.number);
+    jump_table_fn!(table, IncS, inc_s, reg0.string, reg1.string);
+    jump_table_fn!(table, IncN, inc_n, reg0.number, reg1.number);
+    jump_table_fn!(table, IncV, inc_v, reg0.value, reg1.value);
+    jump_table_fn!(table, DecS, dec_s, reg0.string, reg1.string);
+    jump_table_fn!(table, DecN, dec_n, reg0.number, reg1.number);
+    jump_table_fn!(table, DecV, dec_v, reg0.value, reg1.value);
+    jump_table_fn!(table, And, and, reg0.number, reg1.number, reg2.number);
+    jump_table_fn!(table, Or, or, reg0.number, reg1.number, reg2.number);
+    jump_table_fn!(table, Abs, abs, reg0.number, reg1.number);
+    jump_table_fn!(table, Fact, fact, reg0.number, reg1.number);
+    jump_table_fn!(table, Sqrt, sqrt, reg0.number, reg1.number);
+    jump_table_fn!(table, Sin, sin, reg0.number, reg1.number);
+    jump_table_fn!(table, Cos, cos, reg0.number, reg1.number);
+    jump_table_fn!(table, Tan, tan, reg0.number, reg1.number);
+    jump_table_fn!(table, Asin, asin, reg0.number, reg1.number);
+    jump_table_fn!(table, Acos, acos, reg0.number, reg1.number);
+    jump_table_fn!(table, Atan, atan, reg0.number, reg1.number);
+    jump_table_fn!(table, Neg, neg, reg0.number, reg1.number);
+    jump_table_fn!(table, NotN, not_n, reg0.number, reg1.number);
+    jump_table_fn!(table, NotV, not_v, reg0.value, reg1.number);
+    jump_table_fn!(table, BoolN, bool_n, reg0.number, reg1.number);
+    jump_table_fn!(table, BoolV, bool_v, reg0.value, reg1.number);
     table
 };
 
