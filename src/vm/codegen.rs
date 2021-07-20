@@ -45,7 +45,7 @@ impl VMExec {
                     unreachable!();
                 },
             Statement::IfThenElse(cond, t, e) => {
-                let cond = expression_codegen(self, data, cond).into_num(self);
+                let cond = expression_codegen(self, data, cond).into_bool(self);
                 let cond_len = self.code.len();
                 self.code.push(Instr::jump_rel(0, None));
                 for statement in e {
@@ -57,8 +57,8 @@ impl VMExec {
                     self.codegen_statement(statement, data, false);
                 }
                 let t_len = self.code.len();
-                self.code[cond_len] = Instr::jump_rel(e_len - cond_len + 1, Some(cond));
-                self.code[e_len] = Instr::jump_rel(t_len - e_len + 1, None);
+                self.code[cond_len] = Instr::jump_rel(e_len - cond_len, Some(cond));
+                self.code[e_len] = Instr::jump_rel(t_len - e_len, None);
                 self.code[e_len].set_line_end(last);
             }
             Statement::Goto(expr) => {

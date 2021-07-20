@@ -140,7 +140,11 @@ impl ControlFlowGraph {
                         i_arg1 = reg0.assume_init().value.into();
                         i_out = Some(reg1.assume_init().value.into());
                     },
-                    Instr { tag: InstrTag::MoveVN | InstrTag::BoolV, reg0, reg1, .. } => unsafe {
+                    Instr {
+                        tag: InstrTag::MoveVN | InstrTag::BoolV | InstrTag::NotN,
+                        reg0,
+                        reg1,
+                    .. } => unsafe {
                         i_arg1 = reg0.assume_init().value.into();
                         i_out = Some(reg1.assume_init().number.into());
                     },
@@ -183,7 +187,7 @@ impl ControlFlowGraph {
                         tag: InstrTag::IncN | InstrTag::DecN | InstrTag::Abs | InstrTag::Fact
                         | InstrTag::Sqrt | InstrTag::Sin | InstrTag::Cos | InstrTag::Tan
                         | InstrTag::Asin | InstrTag::Acos | InstrTag::Atan | InstrTag::Neg
-                        | InstrTag::Not | InstrTag::BoolN,
+                        | InstrTag::NotN | InstrTag::BoolN,
                         reg0,
                         reg1,
                     .. } => unsafe {
