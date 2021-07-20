@@ -141,7 +141,7 @@ impl ControlFlowGraph {
                         i_out = Some(reg1.assume_init().value.into());
                     },
                     Instr {
-                        tag: InstrTag::MoveVN | InstrTag::BoolV | InstrTag::NotN,
+                        tag: InstrTag::MoveVN | InstrTag::BoolV | InstrTag::NotV,
                         reg0,
                         reg1,
                     .. } => unsafe {
