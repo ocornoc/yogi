@@ -51,18 +51,9 @@ fn parse_local_ident<'a>(
         }
     }
     let (l, r) = remainder.split_at(end_idx);
-    if l.len() >= 3 && id.chars().next().unwrap().eq_ignore_ascii_case(&'g')
-        && l[0].eq_ignore_ascii_case(&'o') && l[1].eq_ignore_ascii_case(&'t')
-        && l[2].eq_ignore_ascii_case(&'o')
-    {
-        *col += 3;
-        *remainder = &remainder[3..];
-        *id += "oto";
-    } else {
-        *col += end_idx;
-        *remainder = r;
-        id.extend(l.iter());
-    }
+    *col += end_idx;
+    *remainder = r;
+    id.extend(l.iter());
 }
 
 fn parse_global_ident(remainder: &mut &[char], col: &mut usize, id: &mut String) {
@@ -103,7 +94,23 @@ impl TryFrom<raw::Line> for Line {
 
         while let &[c, ref r@..] = remainder {
             remainder = r;
-            if c.is_alphabetic() || c == '_' {
+            if let ('g' | 'G', ['o' | 'O', 't' | 'T', 'o' | 'O', r@..]) = (c, r) {
+                tokens.push(Token {
+                    kind: TokenKind::Goto,
+                    start: col,
+                    end: col + 3,
+                });
+                col += 3;
+                remainder = r;
+            } else if let ('i' | 'I', ['f' | 'F', r@..]) = (c, r) {
+                tokens.push(Token {
+                    kind: TokenKind::If,
+                    start: col,
+                    end: col + 1,
+                });
+                col += 1;
+                remainder = r;
+            } else if c.is_alphabetic() || c == '_' {
                 let mut id: String = c.into();
                 let start = col;
                 parse_local_ident(&mut remainder, &mut col, &mut id);
