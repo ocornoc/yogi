@@ -50,10 +50,11 @@ impl Var {
 }
 
 impl pre_ast::Binop {
-    fn get_unop(&self, prec: Precedence) -> Option<Unop> {
-        match self {
-            pre_ast::Binop::Sub if prec <= precedence::NEG => Some(Unop::Neg),
-            _ => None,
+    fn get_unop(&self) -> Option<Unop> {
+        if *self == pre_ast::Binop::Sub {
+            Some(Unop::Neg)
+        } else {
+            None
         }
     }
 
@@ -326,7 +327,7 @@ fn parse_expr_fragment(frags: &mut Vec<Fragment>, prec: Precedence) -> ParseResu
             parse_pre_incdec_expr(frags, true, col),
         Fragment::Dec(col) if prec >= precedence::INC_DEC =>
             parse_pre_incdec_expr(frags, false, col),
-        Fragment::Binop(binop) => if binop.get_unop(prec) == Some(Unop::Neg) {
+        Fragment::Binop(binop) => if binop.get_unop() == Some(Unop::Neg) {
             parse_neg(frags)
         } else {
             Err(ParseErr::ExpectedExpr)
