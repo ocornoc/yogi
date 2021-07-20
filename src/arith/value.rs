@@ -205,7 +205,7 @@ impl Not for Value {
         if let Value::Number(n) = self {
             !n
         } else {
-            Number::ONE
+            Number::ZERO
         }
     }
 }
@@ -217,7 +217,7 @@ impl Not for &'_ Value {
         if let &Value::Number(n) = self {
             !n
         } else {
-            Number::ONE
+            Number::ZERO
         }
     }
 }
