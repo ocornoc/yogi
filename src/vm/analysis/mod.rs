@@ -10,7 +10,7 @@ pub mod cfg;
 pub mod dfg;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CodeRange(Range<CodeLoc>);
+pub struct CodeRange(pub Range<CodeLoc>);
 
 impl CodeRange {
     fn merge(&mut self, other: Self) {
