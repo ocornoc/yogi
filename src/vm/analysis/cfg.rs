@@ -26,8 +26,8 @@ pub type NodeIndex = petgraph::stable_graph::NodeIndex<Idx>;
 
 #[derive(Debug, Clone)]
 pub struct ControlFlowGraph {
-    graph: StableDiGraph<CodeRange, ReachReason, Idx>,
-    root: NodeIndex,
+    pub(super) graph: StableDiGraph<CodeRange, ReachReason, Idx>,
+    pub root: NodeIndex,
 }
 
 impl ControlFlowGraph {

@@ -302,6 +302,42 @@ impl VMExec {
                 AnyReg::Value(reg) => unsafe { self.val_ref(reg).clone() },
             }))
     }
+
+    fn replace_reg(&mut self, old: AnyReg, new: AnyReg) {
+        match old {
+            AnyReg::Number(NumberReg(reg)) => { self.numbers.remove(reg as usize); },
+            AnyReg::String(StringReg(reg)) => { self.strings.remove(reg as usize); },
+            AnyReg::Value(ValueReg(reg)) => { self.values.remove(reg as usize); },
+        }
+
+        
+    }
+
+    fn remove_instr(&mut self, loc: usize) {
+        let was_eol = self.code.remove(loc).is_line_end();
+
+        for start in self.line_starts.iter_mut() {
+            if *start >= loc {
+                *start -= 1;
+            }
+        }
+
+        for (iloc, instr) in self.code.iter_mut().enumerate() {
+            if let Instr { tag: InstrTag::JumpRel, reg0, .. } = instr {
+                let ip_offset = unsafe { &mut (*reg0.as_mut_ptr()).ip_offset };
+                if iloc + *ip_offset as usize >= loc {
+                    *ip_offset -= 1;
+                }
+            }
+        }
+
+        let to_set = if let Some(instr) = self.code.get_mut(loc.saturating_sub(1)) {
+            instr
+        } else {
+            self.code.last_mut().unwrap()
+        };
+        to_set.set_line_end(was_eol);
+    }
 }
 
 #[cfg(test)]

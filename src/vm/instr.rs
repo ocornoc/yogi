@@ -457,6 +457,16 @@ pub(super) union UnsafeArg {
     pub ip_offset: u16,
 }
 
+impl From<AnyReg> for UnsafeArg {
+    fn from(reg: AnyReg) -> Self {
+        match reg {
+            AnyReg::Number(number) => UnsafeArg { number },
+            AnyReg::String(string) => UnsafeArg { string },
+            AnyReg::Value(value) => UnsafeArg { value },
+        }
+    }
+}
+
 #[derive(Clone, Copy)]
 #[repr(packed(8))]
 pub(super) struct Instr {

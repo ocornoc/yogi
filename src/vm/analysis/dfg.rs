@@ -1,5 +1,5 @@
 use super::*;
-use cfg::{*, NodeIndex};
+use cfg::NodeIndex;
 
 type Idx = u16;
 
@@ -67,7 +67,36 @@ impl Display for DataFlowInfo {
 #[derive(Debug, Clone)]
 pub struct DataFlowGraph {
     graph: StableDiGraph<Node, DataFlowInfo, Idx>,
+    pub(in crate::vm) map: AHashMap<AnyReg, NodeIndex>,
     globals: Vec<NodeIndex>,
+}
+
+impl DataFlowGraph {
+    pub fn edges_mutating(&self, node: NodeIndex) -> impl Iterator<Item=EdgeIndex<Idx>> + '_ {
+        let incoming = self
+            .edges_directed(node, Incoming)
+            .filter(|e| e.weight().target > TargetModify::Read);
+        let outgoing = self
+            .edges_directed(node, Outgoing)
+            .filter(|e| e.weight().source > SourceModify::Read);
+        incoming
+            .chain(outgoing)
+            .map(|e| e.id())
+    }
+
+    pub fn is_constant(&self, node: NodeIndex) -> bool {
+        self.edges_mutating(node).next().is_none()
+    }
+
+    pub fn is_global(&self, node: NodeIndex) -> bool {
+        self.globals.contains(&node)
+    }
+
+    pub fn constants(&self) -> impl Iterator<Item=NodeIndex> + '_ {
+        self
+            .node_indices()
+            .filter(move |&node| self.is_constant(node))
+    }
 }
 
 impl Display for DataFlowGraph {
@@ -92,25 +121,26 @@ impl DerefMut for DataFlowGraph {
 
 impl ControlFlowGraph {
     pub fn dfg(&self, vm: &VMExec) -> DataFlowGraph {
+        let regs = vm.numbers.len() + vm.strings.len() + vm.values.len();
         let mut dfg = DataFlowGraph {
-            graph: StableGraph::with_capacity(
-                vm.numbers.len() + vm.strings.len() + vm.values.len(),
-                vm.code.len(),
-            ),
+            graph: StableGraph::with_capacity(regs, vm.code.len()),
+            map: AHashMap::with_capacity(regs),
             globals: Vec::with_capacity(vm.globals.capacity()),
         };
-        let mut map = AHashMap::with_capacity(dfg.graph.capacity().0);
         for reg in 0..vm.numbers.len() as u16 {
             let reg = NumberReg(reg).into();
-            map.insert(reg, dfg.add_node(Node { reg }));
+            let node = dfg.add_node(Node { reg });
+            dfg.map.insert(reg, node);
         }
         for reg in 0..vm.strings.len() as u16 {
             let reg = StringReg(reg).into();
-            map.insert(reg, dfg.add_node(Node { reg }));
+            let node = dfg.add_node(Node { reg });
+            dfg.map.insert(reg, node);
         }
         for reg in 0..vm.values.len() as u16 {
             let reg = ValueReg(reg).into();
-            map.insert(reg, dfg.add_node(Node { reg }));
+            let node = dfg.add_node(Node { reg });
+            dfg.map.insert(reg, node);
         }
 
         for section in self.node_indices() {
@@ -214,23 +244,23 @@ impl ControlFlowGraph {
                 let mut flow_info_arg2;
                 match (i_arg2, i_out) {
                     (None, None) => {
-                        let node = map[&i_arg1];
+                        let node = dfg.map[&i_arg1];
                         dfg.add_edge(node, node, flow_info_arg1);
                     },
                     (None, Some(out)) => {
-                        let arg = map[&i_arg1];
+                        let arg = dfg.map[&i_arg1];
                         if i_arg1 == out {
                             flow_info_arg1.source = SourceModify::ReadWrite;
                             flow_info_arg1.target = TargetModify::ReadWrite;
                             dfg.add_edge(arg, arg, flow_info_arg1);
                         } else {
-                            let out = map[&out];
+                            let out = dfg.map[&out];
                             flow_info_arg1.target = TargetModify::Write;
                             dfg.add_edge(arg, out, flow_info_arg1);
                         }
                     },
                     (Some(arg2), Some(out)) => {
-                        let arg1 = map[&i_arg1];
+                        let arg1 = dfg.map[&i_arg1];
                         if i_arg1 == arg2 {
                             if i_arg1 == out {
                                 flow_info_arg1.source = SourceModify::ReadWrite;
@@ -239,7 +269,8 @@ impl ControlFlowGraph {
                             } else {
                                 flow_info_arg1.source = SourceModify::Read;
                                 flow_info_arg1.target = TargetModify::Write;
-                                dfg.add_edge(arg1, map[&out], flow_info_arg1);
+                                let out = dfg.map[&out];
+                                dfg.add_edge(arg1, out, flow_info_arg1);
                             }
                         } else if i_arg1 == out {
                             flow_info_arg2 = flow_info_arg1.clone();
@@ -247,9 +278,10 @@ impl ControlFlowGraph {
                             flow_info_arg1.target = TargetModify::ReadWrite;
                             dfg.add_edge(arg1, arg1, flow_info_arg1);
                             flow_info_arg2.target = TargetModify::Write;
-                            dfg.add_edge(map[&arg2], arg1, flow_info_arg2);
+                            let arg2 = dfg.map[&arg2];
+                            dfg.add_edge(arg2, arg1, flow_info_arg2);
                         } else if arg2 == out {
-                            let arg2 = map[&arg2];
+                            let arg2 = dfg.map[&arg2];
                             flow_info_arg2 = flow_info_arg1.clone();
                             flow_info_arg1.source = SourceModify::ReadWrite;
                             flow_info_arg1.target = TargetModify::ReadWrite;
@@ -257,19 +289,22 @@ impl ControlFlowGraph {
                             flow_info_arg2.target = TargetModify::Write;
                             dfg.add_edge(arg1, arg2, flow_info_arg2);
                         } else {
-                            let out = map[&out];
+                            let out = dfg.map[&out];
                             flow_info_arg2 = flow_info_arg1.clone();
                             flow_info_arg1.target = TargetModify::Write;
                             dfg.add_edge(arg1, out, flow_info_arg1);
                             flow_info_arg2.target = TargetModify::Write;
-                            dfg.add_edge(map[&arg2], out, flow_info_arg2);
+                            let arg2 = dfg.map[&arg2];
+                            dfg.add_edge(arg2, out, flow_info_arg2);
                         }
                     },
                     _ => unreachable!(),
                 }
             }
         }
-        dfg.globals.extend(vm.globals.values().map(|reg| map[reg]));
+        let globals = &mut dfg.globals;
+        let map = &mut dfg.map;
+        globals.extend(vm.globals.values().map(|reg| map[reg]));
         dfg
     }
 }
