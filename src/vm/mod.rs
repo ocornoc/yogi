@@ -85,6 +85,7 @@ macro_rules! cmp {
 mod codegen;
 mod instr;
 pub mod analysis;
+pub mod sivm;
 
 type Reg = u16;
 
