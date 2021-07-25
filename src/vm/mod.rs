@@ -7,6 +7,7 @@ use ahash::AHashMap;
 use std::cell::{Cell, UnsafeCell};
 use instr::*;
 use std::mem::MaybeUninit;
+use paste::paste;
 
 const STRING_CAP: usize = 4096;
 
@@ -79,6 +80,30 @@ macro_rules! cmp {
         // SAFE: mut ref taken only after all other refs have been used
         *unsafe { $self.num_mut($out) } = result.into();
         $self.set_next_instr();
+    } };
+}
+
+macro_rules! regs {
+    ($name:ident, $inty:ty, $field:ident, $outty:ty) => { paste! {
+        #[inline]
+        unsafe fn [<$name _ptr>](&self, reg: $inty) -> *mut $outty {
+            let cell = if cfg!(debug_assertions) {
+                &self.$field[reg.0 as usize]
+            } else {
+                self.$field.get_unchecked(reg.0 as usize)
+            };
+            cell.get()
+        }
+
+        #[inline(always)]
+        unsafe fn [<$name _ref>]<'a>(&'a self, reg: $inty) -> &'a $outty {
+            &*self.[<$name _ptr>](reg)
+        }
+
+        #[inline(always)]
+        unsafe fn [<$name _mut>]<'a>(&'a self, reg: $inty) -> &'a mut $outty {
+            &mut *self.[<$name _ptr>](reg)
+        }
     } };
 }
 
@@ -233,59 +258,9 @@ impl VMExec {
         self.set_next_line(line);
     }
 
-    unsafe fn num_ref<'a>(&'a self, reg: NumberReg) -> &'a Number {
-        let cell = if cfg!(debug_assertions) {
-            &self.numbers[reg.0 as usize]
-        } else {
-            self.numbers.get_unchecked(reg.0 as usize)
-        };
-        &*cell.get()
-    }
-
-    unsafe fn num_mut<'a>(&'a self, reg: NumberReg) -> &'a mut Number {
-        let cell = if cfg!(debug_assertions) {
-            &self.numbers[reg.0 as usize]
-        } else {
-            self.numbers.get_unchecked(reg.0 as usize)
-        };
-        &mut *cell.get()
-    }
-
-    unsafe fn str_ref<'a>(&'a self, reg: StringReg) -> &'a YString {
-        let cell = if cfg!(debug_assertions) {
-            &self.strings[reg.0 as usize]
-        } else {
-            self.strings.get_unchecked(reg.0 as usize)
-        };
-        &*cell.get()
-    }
-
-    unsafe fn str_mut<'a>(&'a self, reg: StringReg) -> &'a mut YString {
-        let cell = if cfg!(debug_assertions) {
-            &self.strings[reg.0 as usize]
-        } else {
-            self.strings.get_unchecked(reg.0 as usize)
-        };
-        &mut *cell.get()
-    }
-
-    unsafe fn val_ref<'a>(&'a self, reg: ValueReg) -> &'a Value {
-        let cell = if cfg!(debug_assertions) {
-            &self.values[reg.0 as usize]
-        } else {
-            self.values.get_unchecked(reg.0 as usize)
-        };
-        &*cell.get()
-    }
-
-    unsafe fn val_mut<'a>(&'a self, reg: ValueReg) -> &'a mut Value {
-        let cell = if cfg!(debug_assertions) {
-            &self.values[reg.0 as usize]
-        } else {
-            self.values.get_unchecked(reg.0 as usize)
-        };
-        &mut *cell.get()
-    }
+    regs!(num, NumberReg, numbers, Number);
+    regs!(str, StringReg, strings, YString);
+    regs!(val, ValueReg, values, Value);
 
     unsafe fn get_buffer<'a>(&'a self) -> &'a mut YString {
         &mut *self.string_buffer.get()

@@ -47,4 +47,12 @@ impl SIExec {
         }
         todo!()
     }
+
+    regs!(num, NumberReg, numbers, Number);
+    regs!(str, StringReg, strings, YString);
+    regs!(val, ValueReg, values, Value);
+
+    unsafe fn get_buffer<'a>(&'a self) -> &'a mut YString {
+        &mut *self.string_buffer.get()
+    }
 }
