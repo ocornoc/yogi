@@ -280,6 +280,15 @@ impl VMExec {
     }
 }
 
+#[cold]
+unsafe fn unreachable() -> ! {
+    if cfg!(debug_assertions) {
+        unreachable!()
+    } else {
+        std::hint::unreachable_unchecked()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

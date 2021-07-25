@@ -263,12 +263,3 @@ fn expression_codegen(vm: &mut VMExec, data: &mut CodegenData, expr: Expr) -> An
         },
     }
 }
-
-#[cold]
-unsafe fn unreachable() -> ! {
-    if cfg!(debug_assertions) {
-        unreachable!()
-    } else {
-        std::hint::unreachable_unchecked()
-    }
-}
