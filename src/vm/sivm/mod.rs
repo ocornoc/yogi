@@ -20,7 +20,7 @@ impl SuperInstrReg {
 
 #[derive(Debug)]
 pub struct SIExec {
-    sinters: Vec<SuperInstr>,
+    sinstrs: Vec<SuperInstr>,
     numbers: Vec<UnsafeCell<Number>>,
     strings: Vec<UnsafeCell<YString>>,
     values: Vec<UnsafeCell<Value>>,
@@ -35,7 +35,7 @@ impl SIExec {
         cfg.clean_up();
         let mut map = AHashMap::with_capacity(cfg.node_count());
         let mut si = SIExec {
-            sinters: Vec::with_capacity(20),
+            sinstrs: Vec::with_capacity(20),
             numbers: vm.numbers,
             strings: vm.strings,
             values: vm.values,
