@@ -262,6 +262,7 @@ impl VMExec {
     regs!(str, StringReg, strings, YString);
     regs!(val, ValueReg, values, Value);
 
+    #[inline]
     unsafe fn get_buffer<'a>(&'a self) -> &'a mut YString {
         &mut *self.string_buffer.get()
     }
