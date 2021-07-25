@@ -609,6 +609,7 @@ impl Instr {
         instr
     }
 
+    #[inline]
     pub fn set_line_end(&mut self, last: bool) {
         if last {
             self.data |= 0b0000_0001;
@@ -617,10 +618,12 @@ impl Instr {
         }
     }
 
+    #[inline(always)]
     pub const fn is_line_end(&self) -> bool {
         self.data & 0b0000_0001 != 0
     }
 
+    #[inline]
     pub fn set_jumprel_cond(&mut self, start: bool) {
         if start {
             self.data |= 0b0000_0010;
@@ -629,6 +632,7 @@ impl Instr {
         }
     }
 
+    #[inline(always)]
     pub const fn get_jumprel_cond(&self) -> bool {
         self.data & 0b0000_0010 != 0
     }
