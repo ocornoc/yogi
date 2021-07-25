@@ -12,6 +12,7 @@ struct SuperInstrReg(Reg);
 impl SuperInstrReg {
     const INVALID: Self = SuperInstrReg(Reg::MAX);
 
+    #[inline]
     const fn invalid(self) -> bool {
         self.0 == Reg::MAX
     }
