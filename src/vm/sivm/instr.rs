@@ -146,19 +146,20 @@ impl Debug for SubInstr {
 pub struct SuperInstr {
     out_success: SuperInstrReg,
     out_err: SuperInstrReg,
+    out_cond: Option<NumberReg>,
     instrs: Box<[SubInstr]>,
 }
 
 impl SuperInstr {
-    pub(in crate::vm) fn new(vm: &mut SIExec, section: &[Instr]) -> (Self, bool) {
-        let mut fixup_last = false;
+    pub(in crate::vm) fn new(vm: &mut SIExec, section: &[Instr]) -> (Self, Option<Instr>) {
+        let mut fixup_last = None;
         let mut instrs = Vec::with_capacity(section.len());
-        let mut iter = section.iter().copied();
-        let last = iter.next_back().unwrap();
+        let mut iter = section.iter().copied().rev();
+        let last = iter.next().unwrap();
         match last.tag {
             InstrTag::LineStart => unreachable!("line starts are supposed to be stripped!"),
             InstrTag::JumpRel => {
-                fixup_last = true;
+                fixup_last = Some(last);
                 instrs.push(SubInstr {
                     reg0: muiarg_to_muarg(last.reg0),
                     reg1: muiarg_to_muarg(last.reg1),
@@ -167,10 +168,9 @@ impl SuperInstr {
                     call: JUMP_TABLE[last.tag as usize],
                 });
             },
-            InstrTag::JumpErr => {
-                fixup_last = true;
+            InstrTag::JumpErr | InstrTag::JumpLine => {
+                fixup_last = Some(last);
             },
-            InstrTag::JumpLine => todo!(),
             _ => { instrs.push(SubInstr {
                 reg0: muiarg_to_muarg(last.reg0),
                 reg1: muiarg_to_muarg(last.reg1),
@@ -179,7 +179,31 @@ impl SuperInstr {
                 call: JUMP_TABLE[last.tag as usize],
             }) },
         };
-        todo!()
+        for instr in iter {
+            instrs.push(SubInstr {
+                reg0: muiarg_to_muarg(instr.reg0),
+                reg1: muiarg_to_muarg(instr.reg1),
+                reg2: muiarg_to_muarg(instr.reg2),
+                data: instr.data,
+                call: JUMP_TABLE[instr.tag as usize],
+            })
+        }
+        instrs.reverse();
+        (SuperInstr {
+            instrs: instrs.into_boxed_slice(),
+            ..Default::default()
+        }, fixup_last)
+    }
+}
+
+impl Default for SuperInstr {
+    fn default() -> Self {
+        SuperInstr {
+            out_success: SuperInstrReg::INVALID,
+            out_err: SuperInstrReg::INVALID,
+            out_cond: None,
+            instrs: Box::new([]),
+        }
     }
 }
 
@@ -510,6 +534,13 @@ impl SIExec {
         }
         if self.runtime_err_flag.get() {
             self.next_sinstr = sinstr.out_err;
+            true
+        } else if let Some(n) = sinstr.out_cond {
+            self.next_sinstr = if unsafe { self.num_ref(n) }.as_bool() {
+                sinstr.out_success
+            } else {
+                sinstr.out_err
+            };
             true
         } else {
             self.next_sinstr = sinstr.out_success;
