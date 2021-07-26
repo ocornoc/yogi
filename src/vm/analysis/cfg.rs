@@ -65,17 +65,22 @@ impl ControlFlowGraph {
 
     fn merge_adjacent_nodes(&mut self) -> bool {
         let mut did_anything = false;
-        while let Some((left, right)) = self.node_indices().find_map(|n| {
-            let mut iter = self.edges_directed(n, Outgoing);
+        while let Some((left, right)) = self.node_indices().find_map(|left| {
+            let mut iter = self.edges_directed(left, Outgoing);
             if let Some(first) = iter.next() {
                 if iter.next().is_some() {
                     None
                 } else {
                     let right = first.target();
-                    if n == right || right == self.root || *first.weight() > ReachReason::JumpRel {
+                    // left can't be right, right can't be root, the weight has to be a reljump or
+                    // a continue (ie, same line), and right can't have multiple incoming edges
+                    if left == right || right == self.root
+                        || *first.weight() > ReachReason::JumpRel
+                        || self.edges_directed(right, Incoming).count() > 1
+                    {
                         None
                     } else {
-                        Some((n, right))
+                        Some((left, right))
                     }
                 }
             } else {
