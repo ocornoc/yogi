@@ -207,6 +207,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "firestorm"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4d3d6188b8804df28032815ea256b6955c9625c24da7525f387a7af02fbb8f01"
+dependencies = [
+ "firestorm 0.4.6",
+ "firestorm-enabled 0.5.0",
+]
+
+[[package]]
 name = "firestorm-core"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -227,6 +237,16 @@ name = "firestorm-enabled"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9163dd4d7d814fd624289584f77f2d2465917eb9bb261c2c50603aa173a3ddd6"
+dependencies = [
+ "firestorm-core",
+ "inferno",
+]
+
+[[package]]
+name = "firestorm-enabled"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "86ad938ff928f75818ea7ed5600659f09b6acfbda260f951e8c0a26b033a2b26"
 dependencies = [
  "firestorm-core",
  "inferno",
@@ -631,7 +651,7 @@ version = "0.1.0"
 dependencies = [
  "ahash 0.7.4",
  "core_affinity",
- "firestorm 0.4.6",
+ "firestorm 0.5.0",
  "nohash-hasher",
  "petgraph",
  "static_assertions",
