@@ -10,7 +10,7 @@ use super::*;
 #[grammar = "yolol.pest"]
 struct YololParser;
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Hash)]
 pub struct Ident {
     pub name: String,
     pub global: bool,
@@ -185,7 +185,7 @@ impl Expr {
                 let mut pairs = pair.into_inner().rev();
                 let mut last = Expr::parse(pairs.next().unwrap())?;
 
-                while let [Some(arg), Some(op)] = [pairs.next(), pairs.next()] {
+                while let [Some(op), Some(arg)] = [pairs.next(), pairs.next()] {
                     last = Expr::Binop(last.into(), Binop::parse(op), Expr::parse(arg)?.into());
                 }
         
@@ -409,6 +409,12 @@ impl Statement {
     }
 }
 
+impl From<Incdec> for Statement {
+    fn from(i: Incdec) -> Self {
+        Statement::Incdec(i)
+    }
+}
+
 #[derive(Debug, PartialEq, Eq, Clone, Default, Deref, DerefMut)]
 pub struct Line {
     #[deref]
@@ -575,6 +581,56 @@ mod tests {
                 vec![],
             )],
             vec![],
+        )]);
+        Ok(())
+    }
+
+    #[test]
+    fn inc_stmt_test() -> Result<()> {
+        let program = Program::parse("\
+        x-- x++ ++x --x
+        ")?;
+        let base = Incdec {
+            inc: true,
+            ident: Ident::local("x"),
+        };
+        assert_eq!(program[0].stmts, vec![
+            Incdec {
+                inc: false,
+                ..base.clone()
+            }.into(),
+            base.clone().into(),
+            base.clone().into(),
+            Incdec {
+                inc: false,
+                ..base.clone()
+            }.into(),
+        ]);
+        Ok(())
+    }
+
+    #[test]
+    fn assoc_test() -> Result<()> {
+        let program = Program::parse("\
+        y=x+x+x+(x+x)
+        y=x*x*x*(x*x)
+        y=(x^x)^x^x^x
+        ")?;
+        let x: Expr = Ident::local("x").into();
+        assert_eq!(program[0].stmts, vec![Statement::Assign(
+            Ident::local("y"),
+            None,
+            ((x.clone() + x.clone()) + x.clone()) + (x.clone() + x.clone()),
+        )]);
+        assert_eq!(program[1].stmts, vec![Statement::Assign(
+            Ident::local("y"),
+            None,
+            ((x.clone() * x.clone()) * x.clone()) * (x.clone() * x.clone()),
+        )]);
+        assert_eq!(program[2].stmts, vec![Statement::Assign(
+            Ident::local("y"),
+            None,
+            (x.clone() ^ x.clone()) ^ (x.clone()) ^ (x.clone() ^ x.clone()),
         )]);
         Ok(())
     }
