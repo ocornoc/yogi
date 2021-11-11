@@ -127,6 +127,52 @@ impl Value {
             Value::Str(_) => false,
         }
     }
+
+    /// Returns `true` if the value is [`Number`].
+    ///
+    /// [`Number`]: Value::Number
+    pub const fn is_number(&self) -> bool {
+        matches!(self, Self::Number(..))
+    }
+
+    /// Returns `true` if the value is [`Str`].
+    ///
+    /// [`Str`]: Value::Str
+    pub const fn is_str(&self) -> bool {
+        matches!(self, Self::Str(..))
+    }
+
+    pub const fn as_number(&self) -> Option<Number> {
+        if let &Self::Number(n) = self {
+            Some(n)
+        } else {
+            None
+        }
+    }
+
+    pub fn as_number_mut(&mut self) -> Option<&mut Number> {
+        if let Self::Number(n) = self {
+            Some(n)
+        } else {
+            None
+        }
+    }
+
+    pub const fn as_ystring(&self) -> Option<&YString> {
+        if let Self::Str(s) = self {
+            Some(s)
+        } else {
+            None
+        }
+    }
+
+    pub fn as_ystring_mut(&mut self) -> Option<&mut YString> {
+        if let Self::Str(s) = self {
+            Some(s)
+        } else {
+            None
+        }
+    }
 }
 
 impl Clone for Value {
