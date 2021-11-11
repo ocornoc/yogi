@@ -1,0 +1,68 @@
+comment = _{ "//" ~ (!eol ~ ANY)* }
+eol = _{ NEWLINE }
+WHITESPACE = _{ " " | "\t" }
+
+program = _{ SOI ~ line ~ (eol ~ line)* ~ eol* ~ EOI }
+
+line = { statement* ~ comment? }
+
+statement = { goto | if_stmt | modify | assign }
+
+goto = { ^"goto" ~ expression }
+
+modify = ${ (ident ~ ident_op) | (ident_op ~ ident) }
+
+if_stmt = { ^"if" ~ expression ~ ^"then" ~ statement* ~ (else_kw ~ statement*)? ~ ^"end" }
+else_kw = @{ ^"else" }
+
+assign = { ident ~ assign_op ~ expression }
+assign_op = @{ ("+" | "-" | "*" | "/" | "%" | "^")? ~ "=" }
+
+expression = _{ expression_and }
+
+expression_and = { expression_or ~ (and_op ~ expression_or)* }
+and_op = @{ ^"and" }
+
+expression_or = { expression_not ~ (or_op ~ expression_not)* }
+or_op = @{ ^"or" }
+
+expression_not = { not_op* ~ expression_add }
+not_op = @{ ^"not" }
+
+expression_add = { expression_order ~ (add_op ~ expression_order)* }
+add_op = @{ "+" | "-" }
+
+expression_order = { expression_multiply ~ (order_op ~ expression_multiply)* }
+order_op = @{ "==" | "!=" | (("<" | ">") ~ "="?) }
+
+expression_multiply = { expression_exponent ~ (multiply_op ~ expression_exponent)* }
+multiply_op = @{ "*" | "/" | "%" }
+
+expression_exponent = { expression_keyword ~ (exp_op ~ expression_keyword)* }
+exp_op = @{ "^" }
+
+expression_keyword = { keyword_op* ~ expression_neg }
+keyword_op = @{ ^"abs" | ^"sqrt" | (^"a"? ~ (^"sin" | ^"cos" | ^"tan")) }
+
+expression_neg = { expression_postfix | (neg_op+ ~ expression_postfix) }
+neg_op = @{ "-" }
+
+expression_postfix = ${ expression_ident ~ postfix_op? }
+postfix_op = @{ "!" ~ !"=" }
+
+expression_ident = ${ (ident ~ ident_op) | (ident_op ~ ident) | value }
+ident_op = @{ "++" | "--" }
+
+value = !{ string | number | ident | expression_paren }
+expression_paren = _{ "(" ~ expression ~ ")" }
+
+ident = { local_ident | global_ident }
+local_ident = @{ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }
+global_ident = @{ ":" ~ (ASCII_ALPHANUMERIC | "_")+ }
+
+number = @{ "-"? ~ ASCII_DIGIT+ ~ ("." ~ ASCII_DIGIT+)? }
+
+string = ${ string_quote ~ (!string_quote ~ string_char)* ~ string_quote }
+string_quote = _{ "\"" }
+string_char = @{ ("\\" ~ escaped) | ANY }
+escaped = @{ "\\" ~ ("b" | "f" | "n" | "r" | "t" | "\\" | "\"") }

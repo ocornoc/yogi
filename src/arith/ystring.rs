@@ -9,47 +9,11 @@ impl YString {
         self.push(' ');
     }
 
-    pub fn post_inc_v(&mut self, out: &mut Value) {
-        let buffer = out.as_mut_str_or_new(self.len() + 1);
-        buffer.0 += self.as_str();
-        buffer.push(' ');
-        std::mem::swap(buffer, self);
-    }
-
-    pub fn post_inc_s(&mut self, out: &mut YString) {
-        out.clone_from(self);
-        out.push(' ');
-        std::mem::swap(out, self);
-    }
-
     pub fn pre_dec(&mut self) -> ValueResult<()> {
         if self.pop().is_some() {
             Ok(())
         } else {
             Err(RuntimeErr::EmptyStr)
-        }
-    }
-
-    pub fn post_dec_v(&mut self, out: &mut Value) -> ValueResult<()> {
-        if self.is_empty() {
-            Err(RuntimeErr::EmptyStr)
-        } else {
-            let buffer = out.as_mut_str_or_new(self.len() - 1);
-            buffer.0 += self.as_str();
-            buffer.pop();
-            std::mem::swap(buffer, self);
-            Ok(())
-        }
-    }
-
-    pub fn post_dec_s(&mut self, out: &mut YString) -> ValueResult<()> {
-        if self.is_empty() {
-            Err(RuntimeErr::EmptyStr)
-        } else {
-            out.clone_from(self);
-            out.pop();
-            std::mem::swap(out, self);
-            Ok(())
         }
     }
 }
@@ -70,9 +34,9 @@ impl Display for YString {
     }
 }
 
-impl From<String> for YString {
-    fn from(s: String) -> Self {
-        YString(s)
+impl<T: Into<String>> From<T> for YString {
+    fn from(s: T) -> Self {
+        YString(s.into())
     }
 }
 

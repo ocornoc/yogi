@@ -2,8 +2,9 @@ use std::convert::*;
 use std::time::Instant;
 
 mod parser;
-mod vm;
 mod arith;
+/* 
+mod vm;
 
 fn script() -> parser::raw::Script {
     "\
@@ -43,8 +44,10 @@ fn fs_main() {
         vm.step();
     }
 }
+*/
 
 fn main() {
+    /*
     if firestorm::enabled() {
         firestorm::bench("./flames/", fs_main).unwrap();
     } else {
@@ -83,4 +86,5 @@ fn main() {
             }
         }
     }
+    */
 }

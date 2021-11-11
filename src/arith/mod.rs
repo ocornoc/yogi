@@ -94,20 +94,8 @@ impl Number {
         *self += Number::ONE;
     }
 
-    pub fn post_inc(&mut self) -> Self {
-        let new = self.clone();
-        self.pre_inc();
-        new
-    }
-
     pub fn pre_dec(&mut self) {
         *self -= Number::ONE;
-    }
-
-    pub fn post_dec(&mut self) -> Self {
-        let new = self.clone();
-        self.pre_dec();
-        new
     }
 
     pub fn abs(self) -> Self {

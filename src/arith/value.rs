@@ -109,28 +109,6 @@ impl Value {
         }
     }
 
-    pub(super) fn as_mut_str_or_new(&mut self, cap: usize) -> &mut YString {
-        if let Value::Str(s) = self {
-            s.clear();
-            s
-        } else {
-            *self = Value::Str(YString(String::with_capacity(cap)));
-            // SAFE: we just made it a string
-            unsafe { self.as_ystring_unchecked_mut() }
-        }
-    }
-
-    pub fn post_inc(&mut self, out: &mut Value) {
-        match self {
-            Value::Number(n) => {
-                *out = Value::Number(n.post_inc());
-            },
-            Value::Str(s) => {
-                s.post_inc_v(out);
-            },
-        }
-    }
-
     pub fn pre_dec(&mut self) -> ValueResult<()> {
         match self {
             Value::Number(n) => {
@@ -139,18 +117,6 @@ impl Value {
             },
             Value::Str(s) => {
                 s.pre_dec()
-            },
-        }
-    }
-
-    pub fn post_dec(&mut self, out: &mut Value) -> ValueResult<()> {
-        match self {
-            Value::Number(n) => {
-                *out = Value::Number(n.post_dec());
-                Ok(())
-            },
-            Value::Str(s) => {
-                s.post_dec_v(out)
             },
         }
     }
