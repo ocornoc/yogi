@@ -17,14 +17,14 @@ pub struct Ident {
 }
 
 impl Ident {
-    fn local(name: &str) -> Self {
+   pub  fn local(name: &str) -> Self {
         Ident {
             name: name.to_lowercase(),
             global: false,
         }
     }
 
-    fn global(name: &str) -> Self {
+    pub fn global(name: &str) -> Self {
         Ident {
             name: name.to_lowercase(),
             global: true,
@@ -186,7 +186,7 @@ impl Expr {
                 let mut last = Expr::parse(pairs.next().unwrap())?;
 
                 while let [Some(op), Some(arg)] = [pairs.next(), pairs.next()] {
-                    last = Expr::Binop(last.into(), Binop::parse(op), Expr::parse(arg)?.into());
+                    last = Expr::Binop(Expr::parse(arg)?.into(), Binop::parse(op), last.into());
                 }
         
                 Ok(last)
@@ -216,7 +216,7 @@ impl Expr {
             Rule::value => {
                 let pair = pair.into_inner().next().unwrap();
                 match pair.as_rule() {
-                    Rule::string => Ok(Expr::String(YString({
+                    Rule::string => Ok(Expr::String({
                         let mut new = String::new();
                         let mut escaped = false;
                         let s = pair.as_str();
@@ -240,7 +240,7 @@ impl Expr {
                             }
                         }
                         new
-                    }))),
+                    }.into())),
                     Rule::number => Ok(Expr::Number(pair.as_str().parse()?)),
                     Rule::ident => Ok(Expr::Ident(Ident::parse(pair.into_inner()))),
                     _ => Expr::parse(pair),
@@ -448,7 +448,7 @@ pub struct Program {
 }
 
 impl Program {
-    fn parse(s: &str) -> Result<Program> {
+    pub fn parse(s: &str) -> Result<Program> {
         let mut lines = Vec::with_capacity(20);
 
         for line in YololParser::parse(Rule::program, s)? {
@@ -612,25 +612,30 @@ mod tests {
     #[test]
     fn assoc_test() -> Result<()> {
         let program = Program::parse("\
-        y=x+x+x+(x+x)
-        y=x*x*x*(x*x)
-        y=(x^x)^x^x^x
+        y=a+b+c+(d+e)
+        y=a*b*c*(d*e)
+        y=(a^b)^c^d^e
         ")?;
-        let x: Expr = Ident::local("x").into();
+        let y = Ident::local("y");
+        let a: Expr = Ident::local("a").into();
+        let b: Expr = Ident::local("b").into();
+        let c: Expr = Ident::local("c").into();
+        let d: Expr = Ident::local("d").into();
+        let e: Expr = Ident::local("e").into();
         assert_eq!(program[0].stmts, vec![Statement::Assign(
-            Ident::local("y"),
+            y.clone(),
             None,
-            ((x.clone() + x.clone()) + x.clone()) + (x.clone() + x.clone()),
+            ((a.clone() + b.clone()) + c.clone()) + (d.clone() + e.clone()),
         )]);
         assert_eq!(program[1].stmts, vec![Statement::Assign(
             Ident::local("y"),
             None,
-            ((x.clone() * x.clone()) * x.clone()) * (x.clone() * x.clone()),
+            ((a.clone() * b.clone()) * c.clone()) * (d.clone() * e.clone()),
         )]);
         assert_eq!(program[2].stmts, vec![Statement::Assign(
             Ident::local("y"),
             None,
-            (x.clone() ^ x.clone()) ^ (x.clone()) ^ (x.clone() ^ x.clone()),
+            (a.clone() ^ b.clone()) ^ (c.clone() ^ (d.clone() ^ e.clone())),
         )]);
         Ok(())
     }
