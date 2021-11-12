@@ -71,11 +71,11 @@ impl SimpleInterp {
                     Binop::And => Value::Number((l.as_bool() && r.as_bool()).into()),
                     Binop::Or => Value::Number((l.as_bool() || r.as_bool()).into()),
                     Binop::Add => {
-                        l.add_assign(&r, &mut String::new());
+                        l += &r;
                         l
                     },
                     Binop::Sub => {
-                        l.sub_assign(&r, &mut String::new());
+                        l -= &r;
                         l
                     },
                     Binop::Mul => (
@@ -95,10 +95,10 @@ impl SimpleInterp {
                         .into(),
                     Binop::Eq => Value::Number((l == r).into()),
                     Binop::Ne => Value::Number((l != r).into()),
-                    Binop::Le => Value::Number(l.le(&r, &mut String::new()).into()),
-                    Binop::Lt => Value::Number(l.lt(&r, &mut String::new()).into()),
-                    Binop::Ge => Value::Number(r.le(&l, &mut String::new()).into()),
-                    Binop::Gt => Value::Number(r.lt(&l, &mut String::new()).into()),
+                    Binop::Le => Value::Number((l <= r).into()),
+                    Binop::Lt => Value::Number((l < r).into()),
+                    Binop::Ge => Value::Number((l >= r).into()),
+                    Binop::Gt => Value::Number((l > r).into()),
                 })
             },
             &Expr::Unop(op, ref expr) => {
@@ -155,10 +155,10 @@ impl SimpleInterp {
                     .or_default();
                 match op {
                     Some(AssignOp::Add) => {
-                        entry.add_assign(&val, &mut String::new());
+                        *entry += &val;
                     },
                     Some(AssignOp::Sub) => {
-                        entry.sub_assign(&val, &mut String::new());
+                        *entry -= &val;
                     },
                     Some(AssignOp::Mul) => {
                         let entry = ExecuteErr::from_option(entry.as_number_mut())?;

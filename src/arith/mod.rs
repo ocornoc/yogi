@@ -1,4 +1,4 @@
-use std::fmt::{Display, Formatter, Result as FmtResult, Write};
+use std::fmt::{Debug, Display, Formatter, Result as FmtResult};
 use std::str::FromStr;
 use std::ops::*;
 use thiserror::Error;
@@ -7,7 +7,7 @@ pub mod ystring;
 pub use value::*;
 pub use ystring::*;
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Default)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Default)]
 pub struct Number(pub i64);
 
 impl Number {
@@ -57,13 +57,47 @@ impl Number {
         self != Self::ZERO
     }
 
-    pub fn stringify<'a>(&self, buffer: &'a mut String) -> YString {
-        buffer.clear();
-        let out = write!(buffer, "{}", self);
-        if cfg!(debug_assertions) {
-            out.unwrap();
+    pub fn stringify(&self) -> YString {
+        let mut s = YString::default();
+        let data = s.data.as_mut();
+        let int = self.0 / Self::SCALE;
+        let mut dec = (self.0 % Self::SCALE).unsigned_abs() as u32;
+        let neg = int.is_negative();
+
+        let mut int = int.unsigned_abs();
+        let mut rem;
+        loop {
+            rem = (int % 10) as u32;
+            int /= 10;
+            unsafe {
+                data
+                    .push_unchecked(std::char::from_digit(rem, 10)
+                    .unwrap_or_else(|| std::hint::unreachable_unchecked()));
+            }
+            if int == 0 {
+                break;
+            }
         }
-        buffer.clone().into()
+
+        if neg {
+            unsafe { data.push_unchecked('-'); }
+        }
+
+        data.reverse();
+
+        unsafe { data.push_unchecked('.'); }
+
+        for _ in 0..3 {
+            rem = dec % 10;
+            dec /= 10;
+            unsafe {
+                let c = std::char::from_digit(rem, 10)
+                    .unwrap_or_else(|| std::hint::unreachable_unchecked());
+                data.push_unchecked(c);
+            }
+        }
+
+        s
     }
 
     pub fn div_assign(&mut self, other: Self) -> ValueResult<()> {
@@ -192,9 +226,15 @@ impl From<Number> for f64 {
     }
 }
 
+impl Debug for Number {
+    fn fmt(&self, f: &mut Formatter) -> FmtResult {
+        Display::fmt(&self, f)
+    }
+}
+
 impl Display for Number {
     fn fmt(&self, f: &mut Formatter) -> FmtResult {
-        write!(f, "{:.3}", self.as_f64())
+        write!(f, "{}", self.stringify())
     }
 }
 

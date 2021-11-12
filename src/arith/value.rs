@@ -48,58 +48,6 @@ impl Value {
         }
     }
 
-    pub fn le(&self, other: &Self, buffer: &mut String) -> bool {
-        match (self, other) {
-            (Value::Number(l), Value::Number(r)) => l <= r,
-            (Value::Number(l), Value::Str(r)) => l.stringify(buffer) <= *r,
-            (Value::Str(l), Value::Number(r)) => *l <= r.stringify(buffer),
-            (Value::Str(l), Value::Str(r)) => l <= r,
-        }
-    }
-
-    pub fn lt(&self, other: &Self, buffer: &mut String) -> bool {
-        match (self, other) {
-            (Value::Number(l), Value::Number(r)) => l < r,
-            (Value::Number(l), Value::Str(r)) => l.stringify(buffer) < *r,
-            (Value::Str(l), Value::Number(r)) => *l < r.stringify(buffer),
-            (Value::Str(l), Value::Str(r)) => l < r,
-        }
-    }
-
-    pub fn add_assign(&mut self, other: &Self, buffer: &mut String) {
-        match (&mut *self, other) {
-            (Value::Number(l), &Value::Number(r)) => { *l += r; },
-            (Value::Number(l), Value::Str(r)) => {
-                let mut l: YString = l.stringify(buffer);
-                l += r;
-                *self = Value::Str(l);
-            },
-            (Value::Str(l), Value::Number(r)) => {
-                *l += &r.stringify(buffer);
-            },
-            (Value::Str(l), Value::Str(r)) => {
-                *l += r;
-            },
-        }
-    }
-
-    pub fn sub_assign(&mut self, other: &Self, buffer: &mut String) {
-        match (&mut *self, other) {
-            (Value::Number(l), &Value::Number(r)) => { *l -= r; },
-            (Value::Number(l), Value::Str(r)) => {
-                let mut l: YString = l.stringify(buffer);
-                l -= r;
-                *self = Value::Str(l);
-            },
-            (Value::Str(l), Value::Number(r)) => {
-                *l -= &r.stringify(buffer);
-            },
-            (Value::Str(l), Value::Str(r)) => {
-                *l -= r;
-            },
-        }
-    }
-
     pub fn pre_inc(&mut self) {
         match self {
             Value::Number(n) => n.pre_inc(),
@@ -170,6 +118,76 @@ impl Value {
         } else {
             None
         }
+    }
+}
+
+impl AddAssign<&'_ Value> for Value {
+    fn add_assign(&mut self, other: &Value) {
+        match (&mut *self, other) {
+            (Value::Number(l), &Value::Number(r)) => { *l += r; },
+            (Value::Number(l), Value::Str(r)) => {
+                let mut l: YString = l.stringify();
+                l += r;
+                *self = Value::Str(l);
+            },
+            (Value::Str(l), Value::Number(r)) => {
+                *l += &r.stringify();
+            },
+            (Value::Str(l), Value::Str(r)) => {
+                *l += r;
+            },
+        }
+    }
+}
+
+impl SubAssign<&'_ Value> for Value {
+    fn sub_assign(&mut self, other: &Value) {
+        match (&mut *self, other) {
+            (Value::Number(l), &Value::Number(r)) => { *l -= r; },
+            (Value::Number(l), Value::Str(r)) => {
+                let mut l: YString = l.stringify();
+                l -= r;
+                *self = Value::Str(l);
+            },
+            (Value::Str(l), Value::Number(r)) => {
+                *l -= &r.stringify();
+            },
+            (Value::Str(l), Value::Str(r)) => {
+                *l -= r;
+            },
+        }
+    }
+}
+
+impl PartialOrd for Value {
+    fn partial_cmp(&self, _other: &Self) -> Option<std::cmp::Ordering> {
+        unimplemented!()
+    }
+
+    fn le(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Value::Number(l), Value::Number(r)) => l <= r,
+            (Value::Number(l), Value::Str(r)) => l.stringify() <= *r,
+            (Value::Str(l), Value::Number(r)) => *l <= r.stringify(),
+            (Value::Str(l), Value::Str(r)) => l <= r,
+        }
+    }
+
+    fn lt(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Value::Number(l), Value::Number(r)) => l < r,
+            (Value::Number(l), Value::Str(r)) => l.stringify() < *r,
+            (Value::Str(l), Value::Number(r)) => *l < r.stringify(),
+            (Value::Str(l), Value::Str(r)) => l < r,
+        }
+    }
+
+    fn gt(&self, other: &Self) -> bool {
+        other.lt(self)
+    }
+
+    fn ge(&self, other: &Self) -> bool {
+        other.le(self)
     }
 }
 
