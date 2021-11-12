@@ -1,16 +1,24 @@
+use std::fmt::{Display, Debug, Formatter, Result as FmtResult};
+use derive_more::Deref;
+use arrayvec::ArrayVec;
 use super::*;
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
-#[repr(transparent)]
-pub struct YString(pub String);
+const MAX_STRING_CHARS: usize = 1024;
+
+#[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Default, Deref)]
+pub struct YString {
+    #[deref]
+    pub(super) data: Box<ArrayVec<char, MAX_STRING_CHARS>>,
+}
 
 impl YString {
+    #[allow(unused_must_use)]
     pub fn pre_inc(&mut self) {
-        self.push(' ');
+        self.data.try_push(' ');
     }
 
     pub fn pre_dec(&mut self) -> ValueResult<()> {
-        if self.pop().is_some() {
+        if self.data.pop().is_some() {
             Ok(())
         } else {
             Err(RuntimeErr::EmptyStr)
@@ -20,64 +28,55 @@ impl YString {
 
 impl Clone for YString {
     fn clone(&self) -> Self {
-        YString(self.0.clone())
+        YString {
+            data: self.data.clone(),
+        }
     }
 
     fn clone_from(&mut self, source: &Self) {
-        self.0.clone_from(source);
+        self.data.clone_from(&source.data);
     }
 }
 
 impl Display for YString {
     fn fmt(&self, f: &mut Formatter) -> FmtResult {
-        write!(f, "\"{}\"", self.0.escape_debug())
+        write!(f, "\"{}\"", self.data.iter().collect::<String>())
     }
 }
 
 impl<T: Into<String>> From<T> for YString {
-    fn from(s: T) -> Self {
-        YString(s.into())
-    }
-}
-
-impl<'a> From<&'a String> for &'a YString {
-    fn from(s: &'a String) -> Self {
-        // SAFE: Ystring is repr(transparent)
-        unsafe { std::mem::transmute(s) }
-    }
-}
-
-impl<'a> From<&'a mut String> for &'a mut YString {
-    fn from(s: &'a mut String) -> Self {
-        // SAFE: Ystring is repr(transparent)
-        unsafe { std::mem::transmute(s) }
-    }
-}
-
-impl Deref for YString {
-    type Target = String;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl DerefMut for YString {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
+    fn from(string: T) -> Self {
+        YString {
+            data: Box::new(string.into().chars().collect()),
+        }
     }
 }
 
 impl AddAssign<&'_ Self> for YString {
     fn add_assign(&mut self, rhs: &Self) {
-        self.0 += rhs;
+        self.data
+            .try_extend_from_slice(&rhs[0..rhs.len().min(MAX_STRING_CHARS - self.len())])
+            .unwrap_or_else(|_| if cfg!(debug_assertions) {
+                unreachable!()
+            } else {
+                unsafe { std::hint::unreachable_unchecked() }
+            })
     }
 }
 
 impl SubAssign<&'_ Self> for YString {
     fn sub_assign(&mut self, rhs: &Self) {
-        if let Some(i) = self.rfind(rhs.as_str()) {
-            self.drain(i..i + rhs.len());
+        for (start, s) in self.data.windows(rhs.len()).enumerate().rev() {
+            if s == rhs.data.as_slice() {
+                self.data.drain(start..start + rhs.len());
+                return;
+            }
         }
+    }
+}
+
+impl Debug for YString {
+    fn fmt(&self, f: &mut Formatter) -> FmtResult {
+        Display::fmt(self, f)
     }
 }

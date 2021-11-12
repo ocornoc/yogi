@@ -48,36 +48,34 @@ impl Value {
         }
     }
 
-    pub fn le(&self, other: &Self, buffer: &mut YString) -> bool {
-        let (l, r) = match (self, other) {
-            (Value::Number(l), Value::Number(r)) => { return l <= r; },
-            (Value::Number(l), Value::Str(r)) => (l.stringify(buffer) as &_, r),
-            (Value::Str(l), Value::Number(r)) => (l, r.stringify(buffer) as &_),
-            (Value::Str(l), Value::Str(r)) => (l, r),
-        };
-        l <= r
+    pub fn le(&self, other: &Self, buffer: &mut String) -> bool {
+        match (self, other) {
+            (Value::Number(l), Value::Number(r)) => l <= r,
+            (Value::Number(l), Value::Str(r)) => l.stringify(buffer) <= *r,
+            (Value::Str(l), Value::Number(r)) => *l <= r.stringify(buffer),
+            (Value::Str(l), Value::Str(r)) => l <= r,
+        }
     }
 
-    pub fn lt(&self, other: &Self, buffer: &mut YString) -> bool {
-        let (l, r) = match (self, other) {
-            (Value::Number(l), Value::Number(r)) => { return l < r; },
-            (Value::Number(l), Value::Str(r)) => (l.stringify(buffer) as &_, r),
-            (Value::Str(l), Value::Number(r)) => (l, r.stringify(buffer) as &_),
-            (Value::Str(l), Value::Str(r)) => (l, r),
-        };
-        l < r
+    pub fn lt(&self, other: &Self, buffer: &mut String) -> bool {
+        match (self, other) {
+            (Value::Number(l), Value::Number(r)) => l < r,
+            (Value::Number(l), Value::Str(r)) => l.stringify(buffer) < *r,
+            (Value::Str(l), Value::Number(r)) => *l < r.stringify(buffer),
+            (Value::Str(l), Value::Str(r)) => l < r,
+        }
     }
 
-    pub fn add_assign(&mut self, other: &Self, buffer: &mut YString) {
+    pub fn add_assign(&mut self, other: &Self, buffer: &mut String) {
         match (&mut *self, other) {
             (Value::Number(l), &Value::Number(r)) => { *l += r; },
             (Value::Number(l), Value::Str(r)) => {
-                let l: &mut YString = l.stringify(buffer);
-                *l += r;
-                *self = Value::Str(l.clone());
+                let mut l: YString = l.stringify(buffer);
+                l += r;
+                *self = Value::Str(l);
             },
             (Value::Str(l), Value::Number(r)) => {
-                *l += r.stringify(buffer);
+                *l += &r.stringify(buffer);
             },
             (Value::Str(l), Value::Str(r)) => {
                 *l += r;
@@ -85,16 +83,16 @@ impl Value {
         }
     }
 
-    pub fn sub_assign(&mut self, other: &Self, buffer: &mut YString) {
+    pub fn sub_assign(&mut self, other: &Self, buffer: &mut String) {
         match (&mut *self, other) {
             (Value::Number(l), &Value::Number(r)) => { *l -= r; },
             (Value::Number(l), Value::Str(r)) => {
-                let l: &mut YString = l.stringify(buffer).into();
-                *l -= r;
-                *self = Value::Str(l.clone());
+                let mut l: YString = l.stringify(buffer);
+                l -= r;
+                *self = Value::Str(l);
             },
             (Value::Str(l), Value::Number(r)) => {
-                *l -= r.stringify(buffer);
+                *l -= &r.stringify(buffer);
             },
             (Value::Str(l), Value::Str(r)) => {
                 *l -= r;
@@ -105,7 +103,7 @@ impl Value {
     pub fn pre_inc(&mut self) {
         match self {
             Value::Number(n) => n.pre_inc(),
-            Value::Str(s) => s.insert(0, ' '),
+            Value::Str(s) => s.data.insert(0, ' '),
         }
     }
 
@@ -214,11 +212,7 @@ impl Not for Value {
     type Output = Number;
 
     fn not(self) -> Self::Output {
-        if let Value::Number(n) = self {
-            !n
-        } else {
-            Number::ZERO
-        }
+        !&self
     }
 }
 

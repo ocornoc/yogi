@@ -12,8 +12,8 @@ pub struct Number(pub i64);
 
 impl Number {
     const SCALE: i64 = 1000;
-    const SCALE_F32: f32 = Self::SCALE as f32;
-    const SCALE_F64: f64 = Self::SCALE as f64;
+    const SCALE_F32: f32 = 1000.0;
+    const SCALE_F64: f64 = 1000.0;
     pub const MAX: Number = Number(i64::MAX);
     pub const MIN: Number = Number(i64::MIN);
     pub const ONE: Number = Number(1 * Self::SCALE);
@@ -46,24 +46,24 @@ impl Number {
     }
 
     pub fn as_f64(self) -> f64 {
-        self.0 as f64 * Self::SCALE_F64.recip()
+        self.0 as f64 / Self::SCALE_F64
     }
 
     pub fn as_f32(self) -> f32 {
-        self.0 as f32 * Self::SCALE_F32.recip()
+        self.0 as f32 / Self::SCALE_F32
     }
 
     pub fn as_bool(self) -> bool {
         self != Self::ZERO
     }
 
-    pub fn stringify<'a>(&self, buffer: &'a mut String) -> &'a mut YString {
+    pub fn stringify<'a>(&self, buffer: &'a mut String) -> YString {
         buffer.clear();
         let out = write!(buffer, "{}", self);
         if cfg!(debug_assertions) {
             out.unwrap();
         }
-        buffer.into()
+        buffer.clone().into()
     }
 
     pub fn div_assign(&mut self, other: Self) -> ValueResult<()> {
@@ -103,12 +103,8 @@ impl Number {
     }
 
     pub fn sqrt(self) -> Self {
-        if self.0 < 0 || self.0 > 9223372036854775000 {
-            Self::MIN
-        } else {
-            let v = self.as_f64().sqrt();
-            Self::round_to_new(v)
-        }
+        let v = self.as_f64().sqrt();
+        Self::round_to_new(v)
     }
 
     pub fn sin(self) -> Self {
@@ -138,7 +134,11 @@ impl Number {
     }
 
     pub fn atan(self) -> Self {
-        Number::new_f32(self.as_f32().atan().to_degrees())
+        let mut atan = self.as_f32().atan().to_degrees();
+        if atan == -90.0 {
+            atan = 90.0;
+        }
+        Number::new_f32(atan)
     }
 
     pub fn fact(self) -> Self {
