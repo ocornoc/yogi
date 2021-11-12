@@ -3,6 +3,7 @@ use std::time::Instant;
 
 mod parser;
 mod arith;
+mod simple_interp;
 /* 
 mod vm;
 
