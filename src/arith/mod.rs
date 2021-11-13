@@ -140,8 +140,12 @@ impl Number {
     }
 
     pub fn sqrt(self) -> Self {
-        let v = self.as_f64().sqrt();
-        Self::round_to_new(v)
+        if self.0.is_negative() || self.0 >= 9223372036854775000 {
+            Number::MIN
+        } else {
+            let v = self.as_f64().sqrt();
+            Self::round_to_new(v)
+        }
     }
 
     pub fn sin(self) -> Self {
@@ -235,20 +239,70 @@ impl Display for Number {
     }
 }
 
-pub type NumberParseErr = core::num::ParseFloatError;
+#[derive(Debug, Error, Clone, Copy)]
+pub enum NumberParseErr {
+    #[error("Number can't fit in i64")]
+    Overflow,
+    #[error("Found unknown char '{0:}'")]
+    UnknownChar(char),
+}
 
 impl FromStr for Number {
     type Err = NumberParseErr;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let val: f64 = s.parse()?;
-        if val > Self::MAX_VAL_F64 {
-            Ok(Number::MAX)
-        } else if val < Self::MIN_VAL_F64 {
-            Ok(Number::MIN)
+        let neg = s.as_bytes()[0] == b'-';
+        let (mut big, small) = if let Some((big, small)) = s.split_once('.') {
+            (big.chars(), Some(small.chars()))
         } else {
-            Ok(Number::new(val))
+            (s.chars(), None)
+        };
+        if neg {
+            big.next();
         }
+
+        let mut val: i64 = 0;
+        let mut exp: i64 = Number::SCALE / 10;
+
+        for c in big.rev() {
+            if c.is_ascii_digit() {
+                exp = exp
+                    .checked_mul(10)
+                    .ok_or(NumberParseErr::Overflow)?;
+                let d = exp
+                    .checked_mul(c as i64 - '0' as i64)
+                    .ok_or(NumberParseErr::Overflow)?;
+                val = val.checked_add(d).ok_or(NumberParseErr::Overflow)?;
+            } else {
+                return Err(NumberParseErr::UnknownChar(c));
+            }
+        }
+
+        if neg {
+            val = val.checked_neg().ok_or(NumberParseErr::Overflow)?;
+        }
+
+        if let Some(small) = small {
+            exp = Number::SCALE;
+            if neg {
+                exp = -exp;
+            }
+            for c in small.take(3) {
+                if c.is_ascii_digit() {
+                    exp = exp
+                        .checked_div(10)
+                        .ok_or(NumberParseErr::Overflow)?;
+                    let d = exp
+                        .checked_mul(c as i64 - '0' as i64)
+                        .ok_or(NumberParseErr::Overflow)?;
+                    val = val.checked_add(d).ok_or(NumberParseErr::Overflow)?;
+                } else {
+                    return Err(NumberParseErr::UnknownChar(c));
+                }
+            }
+        }
+
+        Ok(Number(val))
     }
 }
 
