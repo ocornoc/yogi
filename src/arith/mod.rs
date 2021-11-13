@@ -97,6 +97,9 @@ impl Number {
             }
         }
 
+        let len = data.len();
+        data.swap(len - 1, len - 3);
+
         s
     }
 
