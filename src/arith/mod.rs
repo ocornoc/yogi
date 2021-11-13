@@ -145,21 +145,15 @@ impl Number {
     }
 
     pub fn sin(self) -> Self {
-        let n = self.as_f32().to_radians().sin();
-        // is this needed? also in cos
-        /*n *= Self::SCALE_F32;
-        n = n.round();
-        n *= Self::SCALE_F32.recip();*/
-        Self::new_f32(n)
+        Self::new((self.as_f32().to_radians() as f64).sin())
     }
 
     pub fn cos(self) -> Self {
-        let n = self.as_f32().to_radians().cos();
-        Self::new_f32(n)
+        Self::new((self.as_f32().to_radians() as f64).cos())
     }
 
     pub fn tan(self) -> Self {
-        Self::new_f32(self.as_f32().to_radians().tan())
+        Self::new((self.as_f32().to_radians() as f64).tan())
     }
 
     pub fn asin(self) -> Self {
