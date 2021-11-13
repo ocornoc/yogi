@@ -65,8 +65,8 @@ impl SimpleInterp {
     fn eval_expr(values: &mut AHashMap<Ident, Value>, expr: &Expr) -> ExecuteResult<Value> {
         match expr {
             &Expr::Binop(ref l, op, ref r) => {
-                let mut l = Self::eval_expr(values, l)?;
                 let r = Self::eval_expr(values, r)?;
+                let mut l = Self::eval_expr(values, l)?;
                 Ok(match op {
                     Binop::And => Value::Number((l.as_bool() && r.as_bool()).into()),
                     Binop::Or => Value::Number((l.as_bool() || r.as_bool()).into()),
