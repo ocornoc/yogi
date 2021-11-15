@@ -68,8 +68,8 @@ impl SimpleInterp {
                 let r = Self::eval_expr(values, r)?;
                 let mut l = Self::eval_expr(values, l)?;
                 Ok(match op {
-                    Binop::And => Value::Number((l.as_bool() && r.as_bool()).into()),
-                    Binop::Or => Value::Number((l.as_bool() || r.as_bool()).into()),
+                    Binop::And => Value::Num((l.as_bool() && r.as_bool()).into()),
+                    Binop::Or => Value::Num((l.as_bool() || r.as_bool()).into()),
                     Binop::Add => {
                         l += &r;
                         l
@@ -93,12 +93,12 @@ impl SimpleInterp {
                     Binop::Pow => ExecuteErr::from_option(l.as_number())?
                         .pow(ExecuteErr::from_option(r.as_number())?)
                         .into(),
-                    Binop::Eq => Value::Number((l == r).into()),
-                    Binop::Ne => Value::Number((l != r).into()),
-                    Binop::Le => Value::Number((l <= r).into()),
-                    Binop::Lt => Value::Number((l < r).into()),
-                    Binop::Ge => Value::Number((l >= r).into()),
-                    Binop::Gt => Value::Number((l > r).into()),
+                    Binop::Eq => Value::Num((l == r).into()),
+                    Binop::Ne => Value::Num((l != r).into()),
+                    Binop::Le => Value::Num((l <= r).into()),
+                    Binop::Lt => Value::Num((l < r).into()),
+                    Binop::Ge => Value::Num((l >= r).into()),
+                    Binop::Gt => Value::Num((l > r).into()),
                 })
             },
             &Expr::Unop(op, ref expr) => {

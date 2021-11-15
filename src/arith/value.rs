@@ -2,14 +2,14 @@ use super::*;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Value {
-    Number(Number),
+    Num(Number),
     Str(YString),
 }
 
 impl Value {
 
     pub unsafe fn as_number_unchecked(&self) -> &Number {
-        if let Value::Number(n) = self {
+        if let Value::Num(n) = self {
             n
         } else if cfg!(debug_assertions) {
             std::unreachable!()
@@ -19,7 +19,7 @@ impl Value {
     }
 
     pub unsafe fn as_number_unchecked_mut(&mut self) -> &mut Number {
-        if let Value::Number(n) = self {
+        if let Value::Num(n) = self {
             n
         } else if cfg!(debug_assertions) {
             std::unreachable!()
@@ -50,14 +50,14 @@ impl Value {
 
     pub fn pre_inc(&mut self) {
         match self {
-            Value::Number(n) => n.pre_inc(),
+            Value::Num(n) => n.pre_inc(),
             Value::Str(s) => s.data.insert(0, ' '),
         }
     }
 
     pub fn pre_dec(&mut self) -> ValueResult<()> {
         match self {
-            Value::Number(n) => {
+            Value::Num(n) => {
                 n.pre_dec();
                 Ok(())
             },
@@ -69,7 +69,7 @@ impl Value {
 
     pub fn as_bool(&self) -> bool {
         match self {
-            Value::Number(n) => n.as_bool(),
+            Value::Num(n) => n.as_bool(),
             Value::Str(_) => false,
         }
     }
@@ -78,7 +78,7 @@ impl Value {
     ///
     /// [`Number`]: Value::Number
     pub const fn is_number(&self) -> bool {
-        matches!(self, Self::Number(..))
+        matches!(self, Self::Num(..))
     }
 
     /// Returns `true` if the value is [`Str`].
@@ -89,7 +89,7 @@ impl Value {
     }
 
     pub const fn as_number(&self) -> Option<Number> {
-        if let &Self::Number(n) = self {
+        if let &Self::Num(n) = self {
             Some(n)
         } else {
             None
@@ -97,7 +97,7 @@ impl Value {
     }
 
     pub fn as_number_mut(&mut self) -> Option<&mut Number> {
-        if let Self::Number(n) = self {
+        if let Self::Num(n) = self {
             Some(n)
         } else {
             None
@@ -124,13 +124,13 @@ impl Value {
 impl AddAssign<&'_ Value> for Value {
     fn add_assign(&mut self, other: &Value) {
         match (&mut *self, other) {
-            (Value::Number(l), &Value::Number(r)) => { *l += r; },
-            (Value::Number(l), Value::Str(r)) => {
+            (Value::Num(l), &Value::Num(r)) => { *l += r; },
+            (Value::Num(l), Value::Str(r)) => {
                 let mut l: YString = l.stringify();
                 l += r;
                 *self = Value::Str(l);
             },
-            (Value::Str(l), Value::Number(r)) => {
+            (Value::Str(l), Value::Num(r)) => {
                 *l += &r.stringify();
             },
             (Value::Str(l), Value::Str(r)) => {
@@ -143,13 +143,13 @@ impl AddAssign<&'_ Value> for Value {
 impl SubAssign<&'_ Value> for Value {
     fn sub_assign(&mut self, other: &Value) {
         match (&mut *self, other) {
-            (Value::Number(l), &Value::Number(r)) => { *l -= r; },
-            (Value::Number(l), Value::Str(r)) => {
+            (Value::Num(l), &Value::Num(r)) => { *l -= r; },
+            (Value::Num(l), Value::Str(r)) => {
                 let mut l: YString = l.stringify();
                 l -= r;
                 *self = Value::Str(l);
             },
-            (Value::Str(l), Value::Number(r)) => {
+            (Value::Str(l), Value::Num(r)) => {
                 *l -= &r.stringify();
             },
             (Value::Str(l), Value::Str(r)) => {
@@ -166,18 +166,18 @@ impl PartialOrd for Value {
 
     fn le(&self, other: &Self) -> bool {
         match (self, other) {
-            (Value::Number(l), Value::Number(r)) => l <= r,
-            (Value::Number(l), Value::Str(r)) => l.stringify() <= *r,
-            (Value::Str(l), Value::Number(r)) => *l <= r.stringify(),
+            (Value::Num(l), Value::Num(r)) => l <= r,
+            (Value::Num(l), Value::Str(r)) => l.stringify() <= *r,
+            (Value::Str(l), Value::Num(r)) => *l <= r.stringify(),
             (Value::Str(l), Value::Str(r)) => l <= r,
         }
     }
 
     fn lt(&self, other: &Self) -> bool {
         match (self, other) {
-            (Value::Number(l), Value::Number(r)) => l < r,
-            (Value::Number(l), Value::Str(r)) => l.stringify() < *r,
-            (Value::Str(l), Value::Number(r)) => *l < r.stringify(),
+            (Value::Num(l), Value::Num(r)) => l < r,
+            (Value::Num(l), Value::Str(r)) => l.stringify() < *r,
+            (Value::Str(l), Value::Num(r)) => *l < r.stringify(),
             (Value::Str(l), Value::Str(r)) => l < r,
         }
     }
@@ -194,7 +194,7 @@ impl PartialOrd for Value {
 impl Clone for Value {
     fn clone(&self) -> Self {
         match self {
-            Value::Number(n) => Value::Number(n.clone()),
+            Value::Num(n) => Value::Num(n.clone()),
             Value::Str(s) => Value::Str(s.clone()),
         }
     }
@@ -214,7 +214,7 @@ impl Clone for Value {
 impl Display for Value {
     fn fmt(&self, f: &mut Formatter) -> FmtResult {
         match self {
-            Value::Number(n) => write!(f, "{}", n),
+            Value::Num(n) => write!(f, "{}", n),
             Value::Str(s) => write!(f, "{}", s),
         }
     }
@@ -222,7 +222,7 @@ impl Display for Value {
 
 impl Default for Value {
     fn default() -> Self {
-        Value::Number(Number::ZERO)
+        Value::Num(Number::ZERO)
     }
 }
 
@@ -238,7 +238,7 @@ impl Not for &'_ Value {
     type Output = Number;
 
     fn not(self) -> Self::Output {
-        if let &Value::Number(n) = self {
+        if let &Value::Num(n) = self {
             !n
         } else {
             Number::ZERO
@@ -254,7 +254,7 @@ impl From<YString> for Value {
 
 impl From<Number> for Value {
     fn from(n: Number) -> Self {
-        Value::Number(n)
+        Value::Num(n)
     }
 }
 
