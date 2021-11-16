@@ -24,6 +24,11 @@ impl YString {
             Err(RuntimeErr::EmptyStr)
         }
     }
+
+    #[inline]
+    pub fn clear(&mut self) {
+        self.data.clear();
+    }
 }
 
 impl Clone for YString {
