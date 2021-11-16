@@ -57,9 +57,8 @@ impl Number {
         self != Self::ZERO
     }
 
-    pub fn stringify(&self) -> YString {
-        let mut s = YString::default();
-        let data = s.data.as_mut();
+    pub fn stringify_with_buffer(&self, buffer: &mut YString) {
+        let data = buffer.data.as_mut();
         let int = self.0 / Self::SCALE;
         let mut dec = (self.0 % Self::SCALE).unsigned_abs() as u32;
         let neg = int.is_negative();
@@ -99,7 +98,11 @@ impl Number {
 
         let len = data.len();
         data.swap(len - 1, len - 3);
+    }
 
+    pub fn stringify(&self) -> YString {
+        let mut s = YString::default();
+        self.stringify_with_buffer(&mut s);
         s
     }
 
