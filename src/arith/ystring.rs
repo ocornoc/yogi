@@ -12,11 +12,13 @@ pub struct YString {
 }
 
 impl YString {
+    #[inline]
     #[allow(unused_must_use)]
     pub fn pre_inc(&mut self) {
         self.data.try_push(' ');
     }
 
+    #[inline]
     pub fn pre_dec(&mut self) -> ValueResult<()> {
         if self.data.pop().is_some() {
             Ok(())
