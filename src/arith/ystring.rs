@@ -29,6 +29,11 @@ impl YString {
     pub fn clear(&mut self) {
         self.data.clear();
     }
+
+    #[inline]
+    pub fn duplicate(&mut self) {
+        self.data.extend(self.data.clone().into_iter());
+    }
 }
 
 impl Clone for YString {
