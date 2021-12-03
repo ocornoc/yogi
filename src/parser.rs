@@ -85,6 +85,19 @@ impl Binop {
     }
 }
 
+impl From<AssignOp> for Binop {
+    fn from(op: AssignOp) -> Self {
+        match op {
+            AssignOp::Add => Binop::Add,
+            AssignOp::Sub => Binop::Sub,
+            AssignOp::Mul => Binop::Mul,
+            AssignOp::Div => Binop::Div,
+            AssignOp::Mod => Binop::Mod,
+            AssignOp::Pow => Binop::Pow,
+        }
+    }
+}
+
 #[derive(Debug, Copy, PartialEq, Eq, Clone)]
 pub enum Unop {
     Neg,
