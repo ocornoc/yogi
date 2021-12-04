@@ -1,0 +1,813 @@
+use std::ops::{Deref, DerefMut};
+use std::sync::atomic::{AtomicBool, Ordering};
+use derive_more::{Index, IndexMut, From};
+use atomic_refcell::AtomicRefCell;
+use ahash::AHashMap;
+use arith::*;
+use super::*;
+use instr::*;
+use codegen::*;
+
+mod instr;
+mod codegen;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, From)]
+enum AnyReg {
+    Num(NumReg),
+    Str(StrReg),
+    Val(ValReg),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, From)]
+enum SectionOrLine {
+    Section(Section),
+    Line(NumReg),
+}
+
+#[derive(Debug, Clone)]
+pub struct SectionCode {
+    instrs: Vec<Instruction>,
+    line_start: bool,
+    success: SectionOrLine,
+}
+
+#[derive(Debug, Index, IndexMut)]
+pub struct IRMachine {
+    #[index]
+    #[index_mut]
+    sections: Vec<SectionCode>,
+    lines: [Section; 20],
+    current_sect: Section,
+    runtime_err: AtomicBool,
+    numbers: Vec<AtomicRefCell<Number>>,
+    strings: Vec<AtomicRefCell<YString>>,
+    values: Vec<AtomicRefCell<Value>>,
+    globals: AHashMap<String, AnyReg>,
+}
+
+macro_rules! reg_fns {
+    ($new_name:ident, $ref_name:ident, $mut_name:ident, $reg:tt, $val:ty, $field:ident) => {
+        fn $new_name(&mut self, val: $val) -> $reg {
+            let len = self.$field.len();
+            self.$field.push(val.into());
+            $reg(len)
+        }
+
+        fn $ref_name(&self, reg: $reg) -> Option<impl Deref<Target = $val> + '_> {
+            self.$field[reg.0].try_borrow().ok()
+        }
+
+        fn $mut_name(&self, reg: $reg) -> Option<impl DerefMut<Target = $val> + '_> {
+            self.$field[reg.0].try_borrow_mut().ok()
+        }
+    };
+}
+
+impl IRMachine {
+    reg_fns!(new_num_reg, num_ref, num_mut, NumReg, Number, numbers);
+    reg_fns!(new_str_reg, str_ref, str_mut, StrReg, YString, strings);
+    reg_fns!(new_val_reg, val_ref, val_mut, ValReg, Value, values);
+
+    fn execute_instr(&self, instr: Instruction) -> Option<Section> {
+        match instr {
+            Instruction::JumpSectionIf(sect, condition) => {
+                debug_assert_ne!(
+                    sect,
+                    Section(!0),
+                    "Failed to fix section {} when trying to JumpSectionIf.\nSection: {:#?}",
+                    self.current_sect.0,
+                    self.sections[self.current_sect.0],
+                );
+                return if self.num_ref(condition).unwrap().as_bool() {
+                    Some(sect)
+                } else {
+                    None
+                };
+            },
+            Instruction::JumpIfError(sect) => {
+                debug_assert_ne!(
+                    sect,
+                    Section(!0),
+                    "Failed to fix section {} when trying to JumpIfError.\nSection: {:#?}",
+                    self.current_sect.0,
+                    self.sections[self.current_sect.0],
+                );
+                let runtime_err = self.runtime_err.swap(false, Ordering::Relaxed);
+                if runtime_err {
+                    return Some(sect);
+                }
+            },
+            Instruction::CopyNum(from, to) => if from != to {
+                *self.num_mut(to).unwrap() = *self.num_ref(from).unwrap();
+            },
+            Instruction::CopyStr(from, to) => if from != to {
+                self.str_mut(to).unwrap().clone_from(&self.str_ref(from).unwrap());
+            },
+            Instruction::CopyVal(from, to) => if from != to {
+                self.val_mut(to).unwrap().clone_from(&self.val_ref(from).unwrap());
+            },
+            Instruction::ValueifyNum(n, v) => {
+                *self.val_mut(v).unwrap() = Value::Num(*self.num_ref(n).unwrap());
+            },
+            Instruction::ValueifyStr(s, v) => {
+                let mut val = self.val_mut(v).unwrap();
+                if let Some(s) = val.as_ystring_mut() {
+                    s
+                } else {
+                    *val = YString::default().into();
+                    val.as_ystring_mut().unwrap()
+                }.clone_from(&self.str_ref(s).unwrap());
+            },
+            Instruction::NumberifyVal(v, n) =>
+                if let Some(vn) = self.val_ref(v).unwrap().as_number() {
+                    *self.num_mut(n).unwrap() = vn;
+                } else {
+                    self.runtime_err.store(true, Ordering::Relaxed);
+                },
+            Instruction::StringifyNum(n, s) => {
+                let mut s = self.str_mut(s).unwrap();
+                s.clear();
+                self.num_ref(n).unwrap().stringify_with_buffer(&mut s);
+            },
+            Instruction::StringifyVal(v, s) => {
+                let mut s = self.str_mut(s).unwrap();
+                s.clear();
+                match &*self.val_ref(v).unwrap() {
+                    Value::Num(v) => {
+                        v.stringify_with_buffer(&mut s);
+                    },
+                    Value::Str(v) => {
+                        s.clone_from(v);
+                    },
+                }
+            },
+            Instruction::IsTruthyNum(n) => {
+                let mut n = self.num_mut(n).unwrap();
+                *n = n.as_bool().into();
+            },
+            Instruction::IsTruthyVal(v, n) => {
+                *self.num_mut(n).unwrap() = self.val_ref(v).unwrap().as_bool().into();
+            },
+            Instruction::NotNum(n) => {
+                let mut n = self.num_mut(n).unwrap();
+                *n = !*n;
+            },
+            Instruction::NotVal(v, n) => {
+                *self.num_mut(n).unwrap() = !&*self.val_ref(v).unwrap();
+            },
+            Instruction::AddNum(n1, n2) => if n1 == n2 {
+                let mut n = self.num_mut(n1).unwrap();
+                let n2 = n.clone();
+                *n += n2;
+            } else {
+                *self.num_mut(n1).unwrap() += *self.num_ref(n2).unwrap();
+            },
+            Instruction::AddStr(s1, s2) => if s1 == s2 {
+                self.str_mut(s1).unwrap().duplicate();
+            } else {
+                *self.str_mut(s1).unwrap() += &self.str_ref(s2).unwrap();
+            },
+            Instruction::AddVal(v1, v2) => if v1 == v2 {
+                match *self.val_mut(v1).unwrap() {
+                    Value::Num(ref mut n) => {
+                        let n2 = n.clone();
+                        *n += n2;
+                    },
+                    Value::Str(ref mut s) => {
+                        s.duplicate();
+                    },
+                }
+            } else {
+                *self.val_mut(v1).unwrap() += &self.val_ref(v2).unwrap();
+            },
+            Instruction::SubNum(n1, n2) => if n1 == n2 {
+                *self.num_mut(n1).unwrap() = Number::ZERO;
+            } else {
+                *self.num_mut(n1).unwrap() -= *self.num_ref(n2).unwrap();
+            },
+            Instruction::SubStr(s1, s2) => if s1 == s2 {
+                self.str_mut(s1).unwrap().clear();
+            } else {
+                *self.str_mut(s1).unwrap() -= &self.str_ref(s2).unwrap();
+            },
+            Instruction::SubVal(v1, v2) => if v1 == v2 {
+                match *self.val_mut(v1).unwrap() {
+                    Value::Num(ref mut n) => {
+                        *n = Number::ZERO;
+                    },
+                    Value::Str(ref mut s) => {
+                        s.clear();
+                    },
+                }
+            } else {
+                *self.val_mut(v1).unwrap() -= &self.val_ref(v2).unwrap();
+            },
+            Instruction::Mul(n1, n2) => {
+                let mut n = self.num_mut(n1).unwrap();
+                let n2 = if n1 == n2 {
+                    n.clone()
+                } else {
+                    self.num_ref(n2).unwrap().clone()
+                };
+                *n *= n2;
+            },
+            Instruction::Div(n1, n2) => {
+                let mut n = self.num_mut(n1).unwrap();
+                let n2 = if n1 == n2 {
+                    n.clone()
+                } else {
+                    self.num_ref(n2).unwrap().clone()
+                };
+                if let Ok(v) = *n / n2 {
+                    *n = v;
+                } else {
+                    self.runtime_err.store(true, Ordering::Relaxed);
+                }
+            },
+            Instruction::Rem(n1, n2) => {
+                let mut n = self.num_mut(n1).unwrap();
+                let n2 = if n1 == n2 {
+                    n.clone()
+                } else {
+                    self.num_ref(n2).unwrap().clone()
+                };
+                if let Ok(v) = *n % n2 {
+                    *n = v;
+                } else {
+                    self.runtime_err.store(true, Ordering::Relaxed);
+                }
+            },
+            Instruction::Pow(n1, n2) => {
+                let mut n = self.num_mut(n1).unwrap();
+                let n2 = if n1 == n2 {
+                    n.clone()
+                } else {
+                    self.num_ref(n2).unwrap().clone()
+                };
+                n.pow_assign(n2);
+            },
+            Instruction::Eq(l, r, out) => {
+                let l = &*self.val_ref(l).unwrap();
+                let r = &*self.val_ref(r).unwrap();
+                *self.num_mut(out).unwrap() = (l == r).into();
+            },
+            Instruction::Le(l, r, out) => {
+                let l = &*self.val_ref(l).unwrap();
+                let r = &*self.val_ref(r).unwrap();
+                *self.num_mut(out).unwrap() = (l <= r).into();
+            },
+            Instruction::Lt(l, r, out) => {
+                let l = &*self.val_ref(l).unwrap();
+                let r = &*self.val_ref(r).unwrap();
+                *self.num_mut(out).unwrap() = (l < r).into();
+            },
+            Instruction::IncNum(n) => {
+                self.num_mut(n).unwrap().pre_inc();
+            },
+            Instruction::IncStr(s) => {
+                self.str_mut(s).unwrap().pre_inc();
+            },
+            Instruction::IncVal(v) => {
+                self.val_mut(v).unwrap().pre_inc();
+            },
+            Instruction::DecNum(n) => {
+                self.num_mut(n).unwrap().pre_dec();
+            },
+            Instruction::DecStr(s) => {
+                let out = self.str_mut(s).unwrap().pre_dec();
+                self.runtime_err.store(out.is_err(), Ordering::Relaxed);
+            },
+            Instruction::DecVal(v) => {
+                let out = self.val_mut(v).unwrap().pre_dec();
+                self.runtime_err.store(out.is_err(), Ordering::Relaxed);
+            },
+            Instruction::Abs(n) => {
+                let mut n = self.num_mut(n).unwrap();
+                *n = n.abs();
+            },
+            Instruction::Fact(n) => {
+                let mut n = self.num_mut(n).unwrap();
+                *n = n.fact();
+            },
+            Instruction::Sqrt(n) => {
+                let mut n = self.num_mut(n).unwrap();
+                *n = n.sqrt();
+            },
+            Instruction::Sin(n) => {
+                let mut n = self.num_mut(n).unwrap();
+                *n = n.sin();
+            },
+            Instruction::Cos(n) => {
+                let mut n = self.num_mut(n).unwrap();
+                *n = n.cos();
+            },
+            Instruction::Tan(n) => {
+                let mut n = self.num_mut(n).unwrap();
+                *n = n.tan();
+            },
+            Instruction::Asin(n) => {
+                let mut n = self.num_mut(n).unwrap();
+                *n = n.asin();
+            },
+            Instruction::Acos(n) => {
+                let mut n = self.num_mut(n).unwrap();
+                *n = n.acos();
+            },
+            Instruction::Atan(n) => {
+                let mut n = self.num_mut(n).unwrap();
+                *n = n.atan();
+            },
+            Instruction::Neg(n) => {
+                let mut n = self.num_mut(n).unwrap();
+                *n = -*n;
+            },
+            Instruction::And(n1, n2) => {
+                let mut n = self.num_mut(n1).unwrap();
+                let n2 = if n1 == n2 {
+                    n.clone()
+                } else {
+                    self.num_ref(n2).unwrap().clone()
+                };
+                *n = (n.as_bool() || n2.as_bool()).into();
+            },
+            Instruction::Or(n1, n2) => {
+                let mut n = self.num_mut(n1).unwrap();
+                let n2 = if n1 == n2 {
+                    n.clone()
+                } else {
+                    self.num_ref(n2).unwrap().clone()
+                };
+                *n = (n.as_bool() && n2.as_bool()).into();
+            },
+        };
+        None
+    }
+
+    fn execute_sect<const FIRST: bool>(&mut self) -> bool {
+        let sect = &self.sections[self.current_sect.0];
+        if !FIRST && sect.line_start {
+            return false;
+        }
+        for &instr in sect.instrs.iter() {
+            if let Some(new_sect) = self.execute_instr(instr) {
+                debug_assert_ne!(
+                    new_sect,
+                    Section(!0),
+                    "Failed to fix section {}.\nSection: {:#?}",
+                    self.current_sect.0,
+                    sect,
+                );
+                self.current_sect = new_sect;
+                return true;
+            }
+        }
+        self.current_sect = match sect.success {
+            SectionOrLine::Section(s) => {
+                debug_assert_ne!(
+                    s,
+                    Section(!0),
+                    "Failed to fix section {}.\nSection: {:#?}",
+                    self.current_sect.0,
+                    sect,
+                );
+                s
+            },
+            SectionOrLine::Line(l) => {
+                let line = self.num_ref(l).unwrap().as_f32().clamp(1.0, 20.0) as usize - 1;
+                self.lines[line]
+            },
+        };
+        true
+    }
+
+    pub fn step(&mut self) {
+        let mut running = true;
+        self.execute_sect::<true>();
+
+        while running {
+            running &= self.execute_sect::<false>();
+            if std::mem::take(self.runtime_err.get_mut()) {
+                panic!(
+                    "After stepping through section {}, failed to handle runtime error.",
+                    self.current_sect.0,
+                );
+            }
+        }
+    }
+
+    pub fn step_repeat(&mut self, reps: usize) {
+        for _ in 0..reps {
+            self.step();
+        }
+    }
+
+    pub fn clone_global(&self, name: &'_ str) -> Value {
+        match self.globals.get(name) {
+            Some(&AnyReg::Num(n)) => self.num_ref(n).unwrap().deref().clone().into(),
+            Some(&AnyReg::Str(s)) => self.str_ref(s).unwrap().deref().clone().into(),
+            Some(&AnyReg::Val(v)) => self.val_ref(v).unwrap().deref().clone(),
+            None => Value::Num(0.into()),
+        }
+    }
+
+    pub fn globals(&self) -> impl IntoIterator<Item = (&str, Value)> + '_ {
+        self.globals
+            .iter()
+            .map(|(s, _)| (s.as_str(), self.clone_global(&s)))
+    }
+}
+
+impl Clone for IRMachine {
+    fn clone(&self) -> Self {
+        Self {
+            sections: self.sections.clone(),
+            lines: self.lines.clone(),
+            current_sect: self.current_sect.clone(),
+            runtime_err: self.runtime_err.load(Ordering::Relaxed).into(),
+            numbers: self.numbers.clone(),
+            strings: self.strings.clone(),
+            values: self.values.clone(),
+            globals: self.globals.clone(),
+        }
+    }
+
+    fn clone_from(&mut self, source: &Self) {
+        self.sections.clone_from(&source.sections);
+        self.lines = source.lines;
+        self.current_sect = source.current_sect;
+        *self.runtime_err.get_mut() = source.runtime_err.load(Ordering::Relaxed);
+        self.numbers.clone_from(&source.numbers);
+        self.strings.clone_from(&source.strings);
+        self.values.clone_from(&source.values);
+        self.globals.clone_from(&source.globals);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::simple_interp::SimpleInterp;
+    use crate::parser::*;
+    use super::*;
+
+    fn tester(src: &str) {
+        let program = Program::parse(src).unwrap();
+        let mut simple_interp = SimpleInterp::new(program.clone());
+        let mut ir_machine = IRMachine::from(program);
+        simple_interp.step_lines(10_000);
+        ir_machine.step_repeat(1_000);
+        assert_eq!(
+            simple_interp.values()[&Ident::global("output")],
+            ir_machine.clone_global("output"),
+        );
+    }
+
+    #[test]
+    fn acid_acos() {
+        tester(
+r#"x=acos(0)
+u/=x!=90 :OUTPUT="Failed #1 : " + x goto10
+x=acos(1)
+u/=x!=0 :OUTPUT="Failed #2 : " + x goto10
+x=acos(0.5)
+u/=x!=60 :OUTPUT="Failed #3 : " + x goto10
+x=acos(17)
+u/=x!=-9223372036854775.808 :OUTPUT="Failed #4 : " + x goto10
+:OUTPUT="ok"
+goto10"#
+        );
+    }
+
+    #[test]
+    fn acid_asin() {
+        tester(
+r#"x=asin(0)
+u/=x!=0 :OUTPUT="Failed #1 : " + x goto10
+x=asin(1)
+u/=x!=90 :OUTPUT="Failed #2 : " + x goto10
+x=asin(0.5)
+u/=x!=30 :OUTPUT="Failed #3 : " + x goto10
+x=asin(17)
+u/=x!=-9223372036854775.808 :OUTPUT="Failed #4 : " + x goto10
+:OUTPUT="ok"
+goto10"#
+        );
+    }
+
+    #[test]
+    fn acid_atan() {
+        tester(
+r#"x=atan(0)
+u/=x!=0 :OUTPUT="Failed #1 : " + x goto10
+x=atan(1)
+u/=x!=45 :OUTPUT="Failed #2 : " + x goto10
+x=atan(0.5)
+u/=x!=26.565 :OUTPUT="Failed #3 : " + x goto10
+x=atan(998877665544332)
+u/=x!=90 :OUTPUT="Failed #4 : " + x goto10
+:OUTPUT="ok"
+goto10"#
+        );
+    }
+
+    #[test]
+    fn acid_exponents() {
+        tester(
+r#"x=2^4
+u/=x!=16 :OUTPUT="Failed #1 : " + x goto12
+x=2^40
+u/=x!=1099511627776 :OUTPUT="Failed #2 : " + x goto12
+x=2^70
+u/=x!=-9223372036854775.808 :OUTPUT="Failed #3 : " + x goto12
+x=2^71
+u/=x!=-9223372036854775.808 :OUTPUT="Failed #4 : " + x goto12
+x=17^17
+u/=x!=-9223372036854775.808 :OUTPUT="Failed #5 : " + x goto12
+:OUTPUT="ok"
+goto12"#
+        );
+    }
+
+    #[test]
+    fn acid_modulus() {
+        tester(
+r#"n=1 x=10%7 y=3 if x!=y then goto19 end n++ 
+x=10%3 y=1 if x!=y then goto19 end n++ 
+x=10%3.1 y=0.7 if x!=y then goto19 end n++ 
+x=10%-3 y=1 if x!=y then goto19 end n++ 
+x=10%(-3) y=1 if x!=y then goto19 end n++ 
+x=10%-3.1 y=0.7 if x!=y then goto19 end n++
+x=10%0.7 y=0.2 if x!=y then goto19 end n++
+x=10%-0.7 y=0.2 if x!=y then goto19 end n++
+
+
+
+
+
+
+
+
+if n != 9 then :OUTPUT="Skipped: "+(9-n)+" tests" goto 20 end
+:OUTPUT="ok" goto20
+:OUTPUT="Failed test #"+n+" got: "+x+" but wanted: "+y
+goto20"#
+        );
+    }
+
+    #[test]
+    fn acid_multiply() {
+        tester(
+r#"x=1 i=24 j=38 x*=3 x*=3 x*=3 x*=3 x*=3 
+u/=x!=243 :OUTPUT="Failed #1 : " + x goto8
+u/=i>0 i-- x*=3 goto3
+u/=x!=-5156598929955.207 :OUTPUT="Failed #2 : " + x goto8
+u/=j>0 j-- x*=3 goto5
+u/=x!=-113000154446.553 :OUTPUT="Failed #2 : " + x goto8
+:OUTPUT="ok"
+goto8"#
+        );
+    }
+
+    #[test]
+    fn acid_precedence1() {
+        tester(
+r#"num=1 x=(0 and 0 or 1 ) y=0 if x!=y then goto19 end num++
+x=((0 and 0) or 1 ) y= 1 if x!=y then goto19 end num++ 
+x=(0 and (0 or 1) ) y= 0 if x!=y then goto19 end num++ 
+x=(5+5-6 ) y= 4 if x!=y then goto19 end num++ 
+x=(-6+5+5 ) y= 4 if x!=y then goto19 end num++ 
+x=(5-6+5 ) y= 4 if x!=y then goto19 end num++ 
+x=(2*5/4 ) y=2.5 if x!=y then goto19 end num++ 
+x=(10/(2*4) ) y= 1.25 if x!=y then goto19 end num++ 
+x=(10/2*4 ) y= 20 if x!=y then goto19 end num++ 
+x=(2+2*2 ) y= 6 if x!=y then goto19 end num++ 
+a=1 x=(5*a++ ) y= 10 if x!=y then goto19 end num++ 
+a=2 x=(5*a-- ) y= 5 if x!=y then goto19 end num++ 
+a=2 x=(-a++ ) y= -3 if x!=y then goto19 end num++ 
+a=2 x=(-a! ) y= -2  if x!=y then goto19 end num++ 
+a=2 x=(-(a!) ) y= -2 if x!=y then goto19 end num++ 
+
+if num != 16 then :OUTPUT="Skipped: "+(16-num)+" tests" goto 20 end
+:OUTPUT="ok" goto20
+:OUTPUT="Failed test #"+num+" got: "+x+" but wanted: "+y
+goto20"#
+        );
+    }
+
+    #[test]
+    fn acid_precedence2() {
+        tester(
+r#"num=1 x=(sqrt 3! ) y=2.449 if x!=y then goto19 end num++ 
+x=(sqrt (3!) ) y=2.449 if x!=y then goto19 end num++ 
+x=((sqrt 9) ) y=3 if x!=y then goto19 end num++ 
+x=((abs 3) ) y=3 if x!=y then goto19 end num++ 
+a=2+2 x=(a! ) y=24  if x!=y then goto19 end num++ 
+x=(2+3! ) y=8 if x!=y then goto19 end num++ 
+x=(2*3! ) y=12 if x!=y then goto19 end num++ 
+a=-3 x=(a! ) y=-9223372036854775.808 if x!=y then goto19 end num++ 
+a=-3 x=(abs a! ) y=-9223372036854775.808 if x!=y then goto19 end num++ 
+a=-3 x=(abs (a!) ) if x!=y then goto19 end num++ 
+
+
+
+
+
+
+if num != 11 then :OUTPUT="Skipped: "+(11-num)+" tests" goto 20 end
+:OUTPUT="ok" goto20
+:OUTPUT="Failed test #"+num+" got: "+x+" but wanted: "+y
+goto20"#
+        );
+    }
+
+    #[test]
+    fn acid_precedence3() {
+        tester(
+r#"num=1 x=(2*2^2 ) y= 8 if x!=y then goto19 end num++ 
+x=(2+2^2 ) y= 6 if x!=y then goto19 end num++ 
+x=(-2^2 ) y= 4 if x!=y then goto19 end num++ 
+x=(-(2^2) ) y= -4 if x!=y then goto19 end num++ 
+x=(sqrt 3+6 ) y= 7.732 if x!=y then goto19 end num++ 
+x=(sqrt (3+6) ) y= 3 if x!=y then goto19 end num++ 
+x=(sqrt 3*3 ) y= 5.196 if x!=y then goto19 end num++ 
+x=(abs -5+5 ) y= 10 if x!=y then goto19 end num++ 
+x=(abs (-5+5) ) y= 0 if x!=y then goto19 end num++ 
+x=(sin (1^2) ) y= 0.017 if x!=y then goto19 end num++ 
+x=((sin 1)^2 ) y= 0 if x!=y then goto19 end num++ 
+x=(sin 1^2 ) y= 0 if x!=y then goto19 end num++ 
+x=(2+2>1+1 ) y= 4 if x!=y then goto19 end num++ 
+x=(2+2>=1+1 ) y= 4 if x!=y then goto19 end num++ 
+x=(2*2>1*1 ) y= 1 if x!=y then goto19 end num++ 
+x=(2*2>=1*1 ) y= 1 if x!=y then goto19 end num++ 
+if num != 17 then :OUTPUT="Skipped: "+(17-num)+" tests" goto 20 end
+:OUTPUT="ok" goto20
+:OUTPUT="Failed test #"+num+" got: "+x+" but wanted: "+y
+goto20"#
+        );
+    }
+
+    #[test]
+    fn acid_precedence4() {
+        tester(
+r#"num=1 x=(2*(2>1)*1 ) y= 2 if x!=y then goto19 end num++ 
+x=(2^2>1^1 ) y= 1 if x!=y then goto19 end num++ 
+x=(2+1==1+2 ) y= 5 if x!=y then goto19 end num++ 
+x=(2*1==1*2 ) y= 1 if x!=y then goto19 end num++ 
+x=(0==1>1==1 ) y= 0 if x!=y then goto19 end num++ 
+x=((0==1)>(1==1) ) y= 0 if x!=y then goto19 end num++ 
+x=(0==(1>1)==1 ) y= 1 if x!=y then goto19 end num++ 
+x=((((0==1)>1)==1) ) y= 0 if x!=y then goto19 end num++ 
+x=(0>1==0 ) y= 1 if x!=y then goto19 end num++ 
+x=((0>1)==0 ) y= 1 if x!=y then goto19 end num++ 
+x=(0>(1==0) ) y= 0 if x!=y then goto19 end num++ 
+x=(0==(0 or 1)==1 ) y= 0 if x!=y then goto19 end num++ 
+x=(0==0 or 1==1 ) y= 1 if x!=y then goto19 end num++ 
+x=(1 or 0 == 0 ) y= 1 if x!=y then goto19 end num++ 
+x=((1 or 0) == 0 ) y= 0 if x!=y then goto19 end num++ 
+x=(1 or (0 == 0) ) y= 1 if x!=y then goto19 end num++ 
+if num != 17 then :OUTPUT="Skipped: "+(17-num)+" tests" goto 20 end
+:OUTPUT="ok" goto20
+:OUTPUT="Failed test #"+num+" got: "+x+" but wanted: "+y
+goto20"#
+        );
+    }
+
+    #[test]
+    fn acid_precedence5() {
+        tester(
+r#"num=1 x=(not 1+1 ) y=0 if x!=y then goto19 end num++ 
+x=(not 0+1 ) y=0 if x!=y then goto19 end num++ 
+x=(not 0+0 ) y=1 if x!=y then goto19 end num++ 
+x=(not (1+1) ) y=0 if x!=y then goto19 end num++ 
+x=((not 1)+1 ) y=1 if x!=y then goto19 end num++ 
+x=((not 0)+1 ) y=2 if x!=y then goto19 end num++ 
+x=(not (1 and 1) ) y=0 if x!=y then goto19 end num++ 
+x=(not (1 and 0) ) y=1 if x!=y then goto19 end num++ 
+x=((not 1) and 1 )  y=0 if x!=y then goto19 end num++ 
+x=((not 0) and 1 ) y=1 if x!=y then goto19 end num++ 
+x=((not 0) and 0 ) y=0 if x!=y then goto19 end num++ 
+x=(1 and not 0 and 1) y=1 if x!=y then goto19 end num++ 
+x=(1 and not 1 and 1) y=0 if x!=y then goto19 end num++ 
+x=(1 and not 0 and 0) y=0 if x!=y then goto19 end num++ 
+x=(1 and not (0 and 0)) y=1 if x!=y then goto19 end num++ 
+x=(1 and not 0) y=1 if x!=y then goto19 end num++ 
+if num != 17 then :OUTPUT="Skipped: "+(17-num)+" tests" goto 20 end
+:OUTPUT="ok" goto20
+:OUTPUT="Failed test #"+num+" got: "+x+" but wanted: "+y
+goto20"#
+        );
+    }
+
+    #[test]
+    fn acid_precedence6() {
+        tester(
+r#"num=1 x=not(not 0) y=0 ifx!=y thengoto19end num++ 
+x=not(not 1) y=1 ifx!=y thengoto19end num++ 
+x=(not 0) and not 0 y=1 ifx!=y thengoto19end num++ 
+x=(not 0) and not 1 y=0 ifx!=y thengoto19end num++ 
+x=1+(not 1) y=1 ifx!=y thengoto19end num++ 
+x=1+(not 0) y=2 ifx!=y thengoto19end num++ 
+x=not 1+1 y=0 ifx!=y thengoto19end num++ 
+x=not 0+1 y=0 ifx!=y thengoto19end num++ 
+x=not 0+0 y=1 ifx!=y thengoto19end num++ 
+
+
+
+
+
+
+
+ifnum!=10then:OUTPUT="Skipped: "+(10-num)+" tests" goto20end
+:OUTPUT="ok" goto20
+:OUTPUT="Failed test #"+num+" got: "+x+" but wanted: "+y
+goto20"#
+        );
+    }
+
+    #[test]
+    fn acid_sqrt() {
+        tester(
+r#"n=1 x=sqrt 24 y=4.899 if x!=y then goto19 end n++ 
+x=(sqrt 2) y=1.414 if x!=y then goto19 end n++ 
+x=(sqrt 7) y=2.645 if x!=y then goto19 end n++ 
+x=(sqrt 32199) y=179.440 if x!=y then goto19 end n++ 
+x=(sqrt 1000001) y=1000 if x!=y then goto19 end n++ 
+x=(sqrt 1000002) y=1000.001 if x!=y then goto19 end n++ 
+x=sqrt 9223372036854775.807 y=-9223372036854775.808 n++ goto19/(x!=y)
+x=(sqrt -3) y=-9223372036854775.808 if x!=y then goto19 end n++ 
+x=sqrt 9223372036854775 y=-9223372036854775.808 n++ goto19/(x!=y) 
+x=sqrt 9223372036854774.999 y=96038388.349 n++ goto19/(x!=y)
+
+
+
+
+
+
+if n != 11 then :OUTPUT="Skipped: "+(11-n)+" tests" goto 20 end
+:OUTPUT="ok" goto20
+:OUTPUT="Failed test #"+n+" got: "+x+" but wanted: "+y
+goto20"#
+        );
+    }
+
+    #[test]
+    fn acid_string_length() {
+        tester(
+r#"a="字字字字字字字字字字字字字字字字字字字字" //20
+b=a b+=b b+=b b+=b b+=b b+=b b+=b b+=b b+=b // b=7680chars
+c+=b!="" b-- c+=b!="" b-- c+=b!="" b-- c+=b!="" b-- c+=b!="" b-- goto3
+if c==1024 then :OUTPUT="ok" goto4 end
+:OUTPUT="Wrong length! got: "+c+" but wanted: 1024" goto5"#
+        );
+    }
+
+    #[test]
+    fn acid_string_length_inv() {
+        tester(
+r#"a="字字字字字字字字字字字字字字字字字字字字" //20
+b=a b+=b b+=b b+=b b+=b b+=b b+=b b+=b b+=b // b=7680chars
+c+=b!="" b-- c+=b!="" b-- c+=b!="" b-- c+=b!="" b-- c+=b!="" b-- goto3
+if c==1023 then :OUTPUT="ok" goto4 end
+:OUTPUT="Wrong length! got: "+c+" but wanted: 1024" goto5"#
+        );
+    }
+
+    #[test]
+    fn acid_string_logic() {
+        tester(
+r#"num=1 if "" then goto 19 end num++
+if "abc" then goto 19 end num++
+if "1" then goto 19 end num++
+if "0" then goto 19 end num++
+if not "" then goto 19 end num++
+if not "1" then goto 19 end num++
+if not "0" then goto 19 end num++
+if 1 and "" then goto 19 end num++
+if 1 and "1" then goto 19 end num++
+if 1 and "0" then goto 19 end num++
+if not (1 or "") then goto 19 end num++
+if not (1 or "1") then goto 19 end num++
+if not (1 or "0") then goto 19 end num++
+if 0 or "" then goto 19 end num++
+if 0 or "1" then goto 19 end num++
+if 0 or "0" then goto 19 end num++
+if num != 17 then :OUTPUT="Skipped: "+(17-num)+" tests" goto 20 end
+:OUTPUT="ok" goto20
+:OUTPUT="Failed test #"+num
+goto20"#
+        );
+    }
+
+    #[test]
+    fn acid_tan() {
+        tester(
+r#"x=tan(0)
+u/=x!=0 :OUTPUT="Failed #1 : " + x goto8
+x=tan(45)
+u/=x!=1 :OUTPUT="Failed #2 : " + x goto8
+x=tan(90)
+u/=x!=-22877332.428 :OUTPUT="Failed #3 : " + x goto8
+:OUTPUT="ok"
+goto8"#
+        );
+    }
+}

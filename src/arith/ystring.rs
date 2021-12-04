@@ -34,7 +34,7 @@ impl YString {
 
     #[inline]
     pub fn duplicate(&mut self) {
-        self.data.extend(self.data.clone().into_iter());
+        self.data.extend(self.data.clone().into_iter().take(MAX_STRING_CHARS - self.data.len()));
     }
 }
 

@@ -7,6 +7,9 @@ license = "MIT OR Apache-2.0"
 [features]
 bench = ["firestorm/enable_system_time"]
 
+[profile.test]
+opt-level = 0
+
 [profile.dev]
 opt-level = 1
 
@@ -29,3 +32,4 @@ pest_derive = "2.1.0"
 derive_more = "0.99.16"
 anyhow = "1.0.45"
 arrayvec = "0.7.2"
+atomic_refcell = "0.1.8"

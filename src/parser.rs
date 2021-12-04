@@ -484,6 +484,28 @@ impl Program {
             lines
         })
     }
+
+    pub fn parse_ignore_ll(s: &str) -> Result<Program> {
+        let mut lines = Vec::with_capacity(20);
+
+        for line in YololParser::parse(Rule::program, s)? {
+            match line.as_rule() {
+                Rule::line => {
+                    lines.push(Line::parse(line.into_inner())?);
+                },
+                Rule::EOI => break,
+                r => unreachable!("parse error in Program: {:?}", r),
+            }
+        }
+
+        ensure!(lines.len() <= 20, "Too many lines in program! Found {} of them.", lines.len());
+        // ensure the program has exactly 20 lines
+        lines.extend(std::iter::repeat(Line::default()).take(20 - lines.len()));
+
+        Ok(Program {
+            lines
+        })
+    }
 }
 
 impl Default for Program {

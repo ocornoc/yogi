@@ -4,24 +4,17 @@ use std::time::Instant;
 mod parser;
 mod arith;
 mod simple_interp;
-/* 
-mod vm;
+mod ir;
 
-fn script() -> parser::raw::Script {
-    "\
-    :done++ b=97 c=89\n\
-    :o++ :done++\n\
-    :done++ x-- x=\"abc\" x=atan x\n\
-    i=(127-1) _=(i/3%1==0)*i/3>1+(i/5%1==0)*i/5>1+(i/7%1==0)*i/7>1 a=i/11%1==0 x=atan x\n\
-    _+=a*i/11>1+(i/13%1==0)*i/13>1+(i/17%1==0)*i/17>1+(i/19%1==0)*i/19>1 x=atan x\n\
-    _+=(i/23%1==0)*i/23>1+(i/29%1==0)*i/29>1+(i/31%1==0)*i/31>1a=i/37%1==0 x=atan x\n\
-    _+=a*i/37>1+(i/41%1==0)*i/41>1+(i/43%1==0)*i/43>1+(i/47%1==0)*i/47>1 x=atan x\n\
-    _+=(i/53%1==0)*i/53>1+(i/59%1==0)*i/59>1+(i/61%1==0)*i/61>1a=i/67%1==0 x=atan x\n\
-    _+=a*i/67>1+(i/71%1==0)*i/71>1+(i/73%1==0)*i/73>1+(i/79%1==0)*i/79>1 x=atan x\n\
-    _+=(i/83%1==0)*i/83>1+(i/c%1==0)*i/c>1+(i/b%1==0)*i/b>1:o+=_<1:done++ x=atan x\n\
-    a=1 if _ then a=2 else a=\"2\" end _/=a\n\
-    z=:o :done++goto 4\n\
-    ".parse().unwrap()
+fn script() -> parser::Program {
+    parser::Program::parse_ignore_ll(
+r#"
+a="_1" b="__1" c="____" d=c+c c+=1 e=d+d d+=1 f=e+e e+=1 g=f+f f+=1 h=g+g
+g+=1 i=h+h h+=1 j=i+i i+=1 j+=1
+l=1023-:i m=l>511 l%=512 n=l>255 l%=256 o=l>127 l%=128 p=l>63 l%=64 q=l>31
+l%=32 r=l>15 l%=16 s=l>7 l%=8 t=l>3 l%=4 u=l>1 l%=2 k=j-m-j+i-n-i+h-o-h+g-p-g+f
+k=k-q-f+e-r-e+d-s-d+c-t-c+b-u-b+a-l-a v=k+:s v-=k :o=v-v-- :done++ goto3"#
+    ).unwrap()
 }
 
 fn set_core_affinity() {
@@ -37,33 +30,20 @@ fn fs_main() {
     const NUM_LINES: usize = 100_000;
     set_core_affinity();
     let script = script();
-    let script: parser::cst::Script = script.try_into().unwrap();
-    let script: parser::pre_ast::Script = script.try_into().unwrap();
-    let script: parser::ast::Script = script.try_into().unwrap();
-    let mut vm = vm::VMExec::from(script);
+    let mut vm = ir::IRMachine::from(script);
     for _ in 0..NUM_LINES {
         vm.step();
     }
 }
-*/
 
 fn main() {
-    /*
     if firestorm::enabled() {
         firestorm::bench("./flames/", fs_main).unwrap();
     } else {
-        const NUM_LINES: usize = 100_000_000;
+        const NUM_LINES: usize = 1_000_000;
         set_core_affinity();
         let script = script();
-        let script: parser::cst::Script = script.try_into().unwrap();
-        let script: parser::pre_ast::Script = script.try_into().unwrap();
-        let script: parser::ast::Script = script.try_into().unwrap();
-        let mut vm = vm::VMExec::from(script);
-        let mut graph = vm.control_flow_graph();
-        graph.clean_up();
-        //println!("CFG:\n{}", graph);
-        //println!("DFG:\n{}", graph.dfg(&vm));
-        println!("{}", graph.domg().display(&graph));
+        let mut vm = ir::IRMachine::from(script);
         loop {
             let start = Instant::now();
             for _ in 0..NUM_LINES {
@@ -87,5 +67,4 @@ fn main() {
             }
         }
     }
-    */
 }
