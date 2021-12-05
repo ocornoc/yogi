@@ -178,7 +178,7 @@ impl Display for Instruction {
             Instruction::NotNum(n) =>
                 write!(f, "{0:} = !{0:}", n),
             Instruction::NotVal(v, n) =>
-                write!(f, "{} = {} is truthy", n, v),
+                write!(f, "{} = !{}", n, v),
             Instruction::AddNum(l, r) =>
                 write!(f, "{} += {}", l, r),
             Instruction::AddStr(l, r) =>
