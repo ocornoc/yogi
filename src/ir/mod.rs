@@ -341,7 +341,7 @@ impl IRMachine {
                 } else {
                     self.num_ref(n2).unwrap().clone()
                 };
-                *n = (n.as_bool() || n2.as_bool()).into();
+                *n = (n.as_bool() && n2.as_bool()).into();
             },
             Instruction::Or(n1, n2) => {
                 let mut n = self.num_mut(n1).unwrap();
@@ -350,7 +350,7 @@ impl IRMachine {
                 } else {
                     self.num_ref(n2).unwrap().clone()
                 };
-                *n = (n.as_bool() && n2.as_bool()).into();
+                *n = (n.as_bool() || n2.as_bool()).into();
             },
         };
         None
