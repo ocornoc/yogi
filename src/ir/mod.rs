@@ -430,6 +430,23 @@ impl IRMachine {
             .map(|(s, _)| (s.as_str(), self.clone_global(&s)))
     }
 
+    pub fn set_global(&mut self, name: &str, val: Value) {
+        if let Some(&reg) = self.globals.get(name) {
+            match (reg, val) {
+                (AnyReg::Num(r), Value::Num(n)) => {
+                    *self.num_mut(r).unwrap() = n;
+                },
+                (AnyReg::Str(r), Value::Str(s)) => {
+                    *self.str_mut(r).unwrap() = s;
+                },
+                (AnyReg::Val(r), val) => {
+                    *self.val_mut(r).unwrap() = val;
+                },
+                (_, _) => panic!("Tried to set ':{}' to incorrect type", name),
+            }
+        }
+    }
+
     pub fn print_bytecode(&self, sink: &mut impl Write) -> std::io::Result<()> {
         fn print_val(vm: &IRMachine, r: AnyReg) -> String {
             match r {
@@ -518,7 +535,6 @@ mod tests {
         let program = Program::parse(src).unwrap();
         let mut simple_interp = SimpleInterp::new(program.clone());
         let mut ir_machine = IRMachine::from(program);
-        ir_machine.print_bytecode(&mut std::io::stdout()).unwrap();
         simple_interp.step_lines(10_000);
         ir_machine.step_repeat(1_000);
         assert_eq!(

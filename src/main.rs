@@ -1,5 +1,6 @@
 use std::convert::*;
 use std::time::Instant;
+use arith:: Value;
 
 mod parser;
 mod arith;
@@ -39,11 +40,12 @@ fn main() {
     if firestorm::enabled() {
         firestorm::bench("./flames/", fs_main).unwrap();
     } else {
-        const NUM_LINES: usize = 1_000_000;
+        const NUM_LINES: usize = 500_000;
         set_core_affinity();
         let script = script();
         let mut vm = ir::IRMachine::from(script);
-        vm.print_bytecode(&mut std::io::stdout()).unwrap();
+        vm.set_global("s", Value::Str("Hello Cylon".to_string().into()));
+        vm.set_global("i", Value::Num(6.into()));
         loop {
             let start = Instant::now();
             for _ in 0..NUM_LINES {
