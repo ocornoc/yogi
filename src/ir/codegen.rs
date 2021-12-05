@@ -1,8 +1,6 @@
 use parser::*;
 use super::*;
 
-const SUCCESS_NEEDS_FIXING: SectionOrLine = SectionOrLine::Section(Section(!0));
-
 struct CodegenData {
     sections: Vec<SectionCode>,
     lines: [Section; 20],

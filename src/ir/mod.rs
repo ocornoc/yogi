@@ -1,5 +1,7 @@
 use std::ops::{Deref, DerefMut};
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::io::Write;
+use std::fmt::{Formatter, Display, Result as FmtResult};
 use derive_more::{Index, IndexMut, From};
 use atomic_refcell::AtomicRefCell;
 use ahash::AHashMap;
@@ -10,6 +12,8 @@ use codegen::*;
 
 mod instr;
 mod codegen;
+
+const SUCCESS_NEEDS_FIXING: SectionOrLine = SectionOrLine::Section(Section(!0));
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, From)]
 enum AnyReg {
@@ -22,6 +26,15 @@ enum AnyReg {
 enum SectionOrLine {
     Section(Section),
     Line(NumReg),
+}
+
+impl Display for SectionOrLine {
+    fn fmt(&self, f: &mut Formatter) -> FmtResult {
+        write!(f, "goto {}", match self {
+            SectionOrLine::Section(s) => s as &dyn Display,
+            SectionOrLine::Line(n) => n,
+        })
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -414,6 +427,26 @@ impl IRMachine {
         self.globals
             .iter()
             .map(|(s, _)| (s.as_str(), self.clone_global(&s)))
+    }
+
+    pub fn print_bytecode(&self, sink: &mut impl Write) -> std::io::Result<()> {
+        for (i, section) in self.sections.iter().enumerate() {
+            writeln!(sink, "Section #{}:", i)?;
+
+            for instr in section.instrs.iter() {
+                writeln!(sink, "\t{}", instr)?;
+            }
+
+            writeln!(sink, "\t{}", if section.success == SUCCESS_NEEDS_FIXING {
+                &"Section end not expected to be reached." as &dyn Display
+            } else {
+                &section.success
+            })?;
+
+            writeln!(sink)?;
+        }
+
+        Ok(())
     }
 }
 
