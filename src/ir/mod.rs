@@ -456,6 +456,14 @@ impl IRMachine {
             }
         }
 
+        writeln!(sink, "Globals:")?;
+
+        for (name, &reg) in self.globals.iter() {
+            writeln!(sink, "`:{}` is {}", name, reg)?;
+        }
+
+        writeln!(sink)?;
+
         for (i, section) in self.sections.iter().enumerate() {
             writeln!(sink, "Section #{}:", i)?;
 
@@ -466,7 +474,7 @@ impl IRMachine {
                     .into_iter()
                     .filter(|&r| match r {
                         AnyReg::Num(n) => *self.num_ref(n).unwrap() != Default::default(),
-                        AnyReg::Str(s) => !self.str_ref(s).unwrap().is_empty(),
+                        AnyReg::Str(_) => true,
                         AnyReg::Val(v) => *self.val_ref(v).unwrap() != Default::default(),
                     })
                     .collect::<Vec<_>>();
