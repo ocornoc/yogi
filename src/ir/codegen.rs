@@ -220,7 +220,7 @@ impl CodegenData {
         e: Vec<Statement>,
     ) -> Section {
         let c = self.codegen_from_expr(section, c);
-        let c = self.numberify(section, c);
+        let c = self.make_truthy(section, c);
         let then_link = self.codegen_and_link_stmts(false, t);
         let then_end = if let Some((then_start, then_end)) = then_link {
             self.sections[section.0].instrs.push(Instruction::JumpSectionIf(then_start, c));
