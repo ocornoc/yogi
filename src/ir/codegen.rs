@@ -224,22 +224,26 @@ impl CodegenData {
         let then_link = self.codegen_and_link_stmts(false, t);
         let then_end = if let Some((then_start, then_end)) = then_link {
             self.sections[section.0].instrs.push(Instruction::JumpSectionIf(then_start, c));
-            then_end.unwrap_or_else(|| self.new_section(false))
+            then_end
         } else {
-            self.new_section(false)
+            self.new_section(false).into()
         };
         let else_link = self.codegen_and_link_stmts(false, e);
         let else_end = if let Some((else_start, else_end)) = else_link {
             self.sections[section.0].success = else_start.into();
-            else_end.unwrap_or_else(|| self.new_section(false))
+            else_end
         } else {
             let new_sect = self.new_section(false);
             self.sections[section.0].success = new_sect.into();
-            new_sect
+            new_sect.into()
         };
         let section = self.new_section(false);
-        self.sections[then_end.0].success = section.into();
-        self.sections[else_end.0].success = section.into();
+        if let Some(then_end) = then_end {
+            self.sections[then_end.0].success = section.into();
+        }
+        if let Some(else_end) = else_end {
+            self.sections[else_end.0].success = section.into();
+        }
         section
     }
 

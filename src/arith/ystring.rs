@@ -52,7 +52,7 @@ impl Clone for YString {
 
 impl Display for YString {
     fn fmt(&self, f: &mut Formatter) -> FmtResult {
-        write!(f, "\"{}\"", self.data.iter().collect::<String>())
+        write!(f, "{}", self.data.iter().collect::<String>())
     }
 }
 
@@ -78,6 +78,9 @@ impl AddAssign<&'_ Self> for YString {
 
 impl SubAssign<&'_ Self> for YString {
     fn sub_assign(&mut self, rhs: &Self) {
+        if self.is_empty() || rhs.is_empty() {
+            return;
+        }
         for (start, s) in self.data.windows(rhs.len()).enumerate().rev() {
             if s == rhs.data.as_slice() {
                 self.data.drain(start..start + rhs.len());
