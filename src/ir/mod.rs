@@ -2,7 +2,7 @@ use std::ops::{Deref, DerefMut};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::io::Write;
 use std::fmt::{Formatter, Display, Result as FmtResult};
-use derive_more::{Index, IndexMut, From};
+use derive_more::{Index, IndexMut, From, Display};
 use atomic_refcell::AtomicRefCell;
 use ahash::AHashMap;
 use arith::*;
@@ -15,7 +15,7 @@ mod codegen;
 
 const SUCCESS_NEEDS_FIXING: SectionOrLine = SectionOrLine::Section(Section(!0));
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, From)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, From, Display)]
 enum AnyReg {
     Num(NumReg),
     Str(StrReg),
@@ -371,10 +371,10 @@ impl IRMachine {
                     sect,
                 );
                 self.current_sect = new_sect;
-                return true;
+                return false;
             }
         }
-        self.current_sect = match sect.success {
+        match sect.success {
             SectionOrLine::Section(s) => {
                 debug_assert_ne!(
                     s,
@@ -383,14 +383,15 @@ impl IRMachine {
                     self.current_sect.0,
                     sect,
                 );
-                s
+                self.current_sect = s;
+                true
             },
             SectionOrLine::Line(l) => {
                 let line = self.num_ref(l).unwrap().as_f32().clamp(1.0, 20.0) as usize - 1;
-                self.lines[line]
+                self.current_sect = self.lines[line];
+                false
             },
-        };
-        true
+        }
     }
 
     pub fn step(&mut self) {
@@ -430,11 +431,42 @@ impl IRMachine {
     }
 
     pub fn print_bytecode(&self, sink: &mut impl Write) -> std::io::Result<()> {
+        fn print_val(vm: &IRMachine, r: AnyReg) -> String {
+            match r {
+                AnyReg::Num(n) => format!("{}", vm.num_ref(n).unwrap().deref()),
+                AnyReg::Str(s) => format!("\"{}\"", vm.str_ref(s).unwrap().deref()),
+                AnyReg::Val(v) => format!("{}", vm.val_ref(v).unwrap().deref()),
+            }
+        }
+
         for (i, section) in self.sections.iter().enumerate() {
             writeln!(sink, "Section #{}:", i)?;
 
             for instr in section.instrs.iter() {
-                writeln!(sink, "\t{}", instr)?;
+                write!(sink, "\t{}", instr)?;
+                let relevant = instr
+                    .relevant()
+                    .into_iter()
+                    .filter(|&r| match r {
+                        AnyReg::Num(n) => *self.num_ref(n).unwrap() != Default::default(),
+                        AnyReg::Str(s) => !self.str_ref(s).unwrap().is_empty(),
+                        AnyReg::Val(v) => *self.val_ref(v).unwrap() != Default::default(),
+                    })
+                    .collect::<Vec<_>>();
+                match relevant.as_slice() {
+                    [] => (),
+                    &[first] => write!(sink, "      ({} = {})", first, print_val(self, first))?,
+                    [first, mid@..] => {
+                        write!(sink, "      ({} = {}", first, print_val(self, *first))?;
+
+                        for &reg in mid {
+                            write!(sink, ", {} = {}", reg, print_val(self, reg))?;
+                        }
+
+                        write!(sink, ")")?;
+                    },
+                }
+                writeln!(sink)?;
             }
 
             writeln!(sink, "\t{}", if section.success == SUCCESS_NEEDS_FIXING {
@@ -486,6 +518,7 @@ mod tests {
         let program = Program::parse(src).unwrap();
         let mut simple_interp = SimpleInterp::new(program.clone());
         let mut ir_machine = IRMachine::from(program);
+        ir_machine.print_bytecode(&mut std::io::stdout()).unwrap();
         simple_interp.step_lines(10_000);
         ir_machine.step_repeat(1_000);
         assert_eq!(
