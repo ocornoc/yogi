@@ -156,29 +156,29 @@ impl Display for Instruction {
             Instruction::JumpIfError(s) =>
                 write!(f, "If the error flag is set, jump to {}", s),
             Instruction::CopyNum(i, o) =>
-                write!(f, "{} := {}", o, i),
+                write!(f, "{} = {}", o, i),
             Instruction::CopyStr(i, o) =>
-                write!(f, "{} := {}", o, i),
+                write!(f, "{} = {}", o, i),
             Instruction::CopyVal(i, o) =>
-                write!(f, "{} := {}", o, i),
+                write!(f, "{} = {}", o, i),
             Instruction::ValueifyNum(i, o) =>
-                write!(f, "{} := {}", o, i),
+                write!(f, "{} = {}", o, i),
             Instruction::ValueifyStr(i, o) =>
-                write!(f, "{} := {}", o, i),
+                write!(f, "{} = {}", o, i),
             Instruction::NumberifyVal(i, o) =>
-                write!(f, "If {0:} is a number, {1:} := {0:}. Otherwise, error.", i, o),
+                write!(f, "If {0:} is a number, {1:} = {0:}. Otherwise, error.", i, o),
             Instruction::StringifyNum(i, o) =>
-                write!(f, "{} := {}", o, i),
+                write!(f, "{} = {}", o, i),
             Instruction::StringifyVal(i, o) =>
-                write!(f, "{} := {}", o, i),
+                write!(f, "{} = {}", o, i),
             Instruction::IsTruthyNum(n) =>
-                write!(f, "{0:} := {0:} is truthy", n),
+                write!(f, "{0:} = {0:} is truthy", n),
             Instruction::IsTruthyVal(v, n) =>
-                write!(f, "{} := {} is truthy", n, v),
+                write!(f, "{} = {} is truthy", n, v),
             Instruction::NotNum(n) =>
-                write!(f, "{0:} := !{0:}", n),
+                write!(f, "{0:} = !{0:}", n),
             Instruction::NotVal(v, n) =>
-                write!(f, "{} := {} is truthy", n, v),
+                write!(f, "{} = {} is truthy", n, v),
             Instruction::AddNum(l, r) =>
                 write!(f, "{} += {}", l, r),
             Instruction::AddStr(l, r) =>
@@ -200,11 +200,11 @@ impl Display for Instruction {
             Instruction::Pow(l, r) =>
                 write!(f, "{} ^= {}", l, r),
             Instruction::Eq(l, r, o) =>
-                write!(f, "{} := {} == {}", o, l, r),
+                write!(f, "{} = {} == {}", o, l, r),
             Instruction::Le(l, r, o) =>
-                write!(f, "{} := {} <= {}", o, l, r),
+                write!(f, "{} = {} <= {}", o, l, r),
             Instruction::Lt(l, r, o) =>
-                write!(f, "{} := {} > {}", o, l, r),
+                write!(f, "{} = {} > {}", o, l, r),
             Instruction::IncNum(n) =>
                 write!(f, "++({})", n),
             Instruction::IncStr(s) =>
@@ -218,25 +218,25 @@ impl Display for Instruction {
             Instruction::DecVal(v) =>
                 write!(f, "--({})", v),
             Instruction::Abs(n) =>
-                write!(f, "{0:} := abs({0:})", n),
+                write!(f, "{0:} = abs({0:})", n),
             Instruction::Fact(n) =>
-                write!(f, "{0:} := factorial({0:})", n),
+                write!(f, "{0:} = factorial({0:})", n),
             Instruction::Sqrt(n) =>
-                write!(f, "{0:} := sqrt({0:})", n),
+                write!(f, "{0:} = sqrt({0:})", n),
             Instruction::Sin(n) =>
-                write!(f, "{0:} := sin({0:})", n),
+                write!(f, "{0:} = sin({0:})", n),
             Instruction::Cos(n) =>
-                write!(f, "{0:} := cos({0:})", n),
+                write!(f, "{0:} = cos({0:})", n),
             Instruction::Tan(n) =>
-                write!(f, "{0:} := tan({0:})", n),
+                write!(f, "{0:} = tan({0:})", n),
             Instruction::Asin(n) =>
-                write!(f, "{0:} := asin({0:})", n),
+                write!(f, "{0:} = asin({0:})", n),
             Instruction::Acos(n) =>
-                write!(f, "{0:} := acos({0:})", n),
+                write!(f, "{0:} = acos({0:})", n),
             Instruction::Atan(n) =>
-                write!(f, "{0:} := atan({0:})", n),
+                write!(f, "{0:} = atan({0:})", n),
             Instruction::Neg(n) =>
-                write!(f, "{0:} := -({0:})", n),
+                write!(f, "{0:} = -({0:})", n),
             Instruction::And(l, r) =>
                 write!(f, "{} &= {}", l, r),
             Instruction::Or(l, r) =>
