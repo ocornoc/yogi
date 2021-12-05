@@ -93,9 +93,18 @@ impl CodegenData {
         self.make_val(section, n.into())
     }
 
+    fn copy_valreg(&mut self, section: Section, r: ValReg) -> ValReg {
+        let v = self.values.len().into();
+        self.values.push(Default::default());
+        self.sections[section.0].instrs.push(Instruction::CopyVal(r, v));
+        v
+    }
+
     fn codegen_from_binop(&mut self, section: Section, l: Expr, op: Binop, r: Expr) -> ValReg {
-        let r = self.codegen_from_expr(section, r);
-        let l = self.codegen_from_expr(section, l);
+        let mut r = self.codegen_from_expr(section, r);
+        let mut l = self.codegen_from_expr(section, l);
+        r = self.copy_valreg(section, r);
+        l = self.copy_valreg(section, l);
         match op {
             Binop::And => {
                 let r = self.make_truthy(section, r);
@@ -125,7 +134,8 @@ impl CodegenData {
     }
 
     fn codegen_from_unop(&mut self, section: Section, op: Unop, r: Expr) -> ValReg {
-        let r = self.codegen_from_expr(section, r);
+        let mut r = self.codegen_from_expr(section, r);
+        r = self.copy_valreg(section, r);
         if op == Unop::Not {
             let n = self.numbers.len().into();
             self.numbers.push(0.into());
