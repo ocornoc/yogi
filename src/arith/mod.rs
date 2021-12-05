@@ -83,8 +83,12 @@ impl Number {
         }
 
         data.reverse();
+        if dec == 0 {
+            return;
+        }
 
         unsafe { data.push_unchecked('.'); }
+        let old_len = data.len();
 
         for _ in 0..3 {
             rem = dec % 10;
@@ -94,10 +98,13 @@ impl Number {
                     .unwrap_or_else(|| std::hint::unreachable_unchecked());
                 data.push_unchecked(c);
             }
+            if dec == 0 {
+                break;
+            }
         }
 
         let len = data.len();
-        data.swap(len - 1, len - 3);
+        data[old_len..len].reverse();
     }
 
     pub fn stringify(&self) -> YString {
