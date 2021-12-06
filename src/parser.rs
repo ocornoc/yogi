@@ -243,9 +243,21 @@ impl Expr {
                     Rule::string => Ok(Expr::String({
                         let mut new = String::new();
                         let mut escaped = false;
+                        let mut unicode = false;
+                        let mut unicode_cp = String::with_capacity(6);
                         let s = pair.as_str();
                         for c in s[1..s.len() - 1].chars() {
-                            if escaped {
+                            if unicode && if c.is_ascii_hexdigit() && unicode_cp.len() < 6 {
+                                true
+                            } else {
+                                unicode = false;
+                                escaped = false;
+                                new.push(parse_codepoint(&unicode_cp));
+                                unicode_cp.clear();
+                                false
+                            } {
+                                unicode_cp.push(c);
+                            } else if escaped {
                                 new.push(match c {
                                     '\\' => '\\',
                                     'b' => '\x08',
@@ -254,6 +266,10 @@ impl Expr {
                                     'r' => '\r',
                                     't' => '\t',
                                     '"' => '"',
+                                    'u' => {
+                                        unicode = true;
+                                        continue;
+                                    },
                                     _ => unreachable!(),
                                 });
                                 escaped = false;
@@ -273,6 +289,10 @@ impl Expr {
             r => unreachable!("parse error in Expr: {:?}", r),
         }
     }
+}
+
+fn parse_codepoint(_s: &str) -> char {
+    todo!("Haven't added unicde codepoint parsing yet. Someday, if yolol even supports it!")
 }
 
 impl<T: Into<Number>> From<T> for Expr {
