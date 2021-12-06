@@ -51,7 +51,7 @@ impl Value {
     pub fn pre_inc(&mut self) {
         match self {
             Value::Num(n) => n.pre_inc(),
-            Value::Str(s) => s.data.insert(0, ' '),
+            Value::Str(s) => s.pre_inc(),
         }
     }
 
@@ -61,9 +61,7 @@ impl Value {
                 n.pre_dec();
                 Ok(())
             },
-            Value::Str(s) => {
-                s.pre_dec()
-            },
+            Value::Str(s) => s.pre_dec(),
         }
     }
 

@@ -69,9 +69,9 @@ impl Number {
             rem = (int % 10) as u32;
             int /= 10;
             unsafe {
-                data
-                    .push_unchecked(std::char::from_digit(rem, 10)
-                    .unwrap_or_else(|| std::hint::unreachable_unchecked()));
+                let c = std::char::from_digit(rem, 10)
+                    .unwrap_or_else(|| std::hint::unreachable_unchecked());
+                data.push_unchecked(c as u8);
             }
             if int == 0 {
                 break;
@@ -79,7 +79,7 @@ impl Number {
         }
 
         if neg {
-            unsafe { data.push_unchecked('-'); }
+            unsafe { data.push_unchecked(b'-'); }
         }
 
         data.reverse();
@@ -87,7 +87,7 @@ impl Number {
             return;
         }
 
-        unsafe { data.push_unchecked('.'); }
+        unsafe { data.push_unchecked(b'.'); }
         let old_len = data.len();
 
         for _ in 0..3 {
@@ -96,7 +96,7 @@ impl Number {
             unsafe {
                 let c = std::char::from_digit(rem, 10)
                     .unwrap_or_else(|| std::hint::unreachable_unchecked());
-                data.push_unchecked(c);
+                data.push_unchecked(c as u8);
             }
             if dec == 0 {
                 break;
