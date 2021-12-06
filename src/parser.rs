@@ -1,4 +1,5 @@
 use std::ops::*;
+use std::fmt::{Display, Formatter, Result as FmtResult};
 use anyhow::*;
 use derive_more::{Deref, DerefMut};
 use arith::{Number, YString};
@@ -17,7 +18,7 @@ pub struct Ident {
 }
 
 impl Ident {
-   pub  fn local(name: &str) -> Self {
+   pub fn local(name: &str) -> Self {
         Ident {
             name: name.to_lowercase(),
             global: false,
@@ -42,6 +43,16 @@ impl Ident {
             },
             global: pair.as_rule() == Rule::global_ident,
         }
+    }
+}
+
+impl Display for Ident {
+    fn fmt(&self, f: &mut Formatter) -> FmtResult {
+        if self.global {
+            f.write_str(":")?;
+        }
+
+        f.write_str(&self.name)
     }
 }
 

@@ -1,6 +1,7 @@
 use std::convert::*;
 use std::time::Instant;
 use arith:: Value;
+use parser::Ident;
 
 mod parser;
 mod arith;
@@ -30,7 +31,7 @@ fn fs_main() {
     const NUM_LINES: usize = 100_000;
     set_core_affinity();
     let script = script();
-    let mut vm = ir::IRMachine::from(script);
+    let mut vm = ir::IRMachine::from_ast(Default::default(), script);
     for _ in 0..NUM_LINES {
         vm.step();
     }
@@ -43,9 +44,9 @@ fn main() {
         const NUM_LINES: usize = 500_000;
         set_core_affinity();
         let script = script();
-        let mut vm = ir::IRMachine::from(script);
-        vm.set_global("s", Value::Str("Hello Cylon".to_string().into()));
-        vm.set_global("i", Value::Num(6.into()));
+        let mut vm = ir::IRMachine::from_ast(Default::default(), script);
+        vm.set_ident(&Ident::global("s"), Value::Str("Hello Cylon".to_string().into()));
+        vm.set_ident(&Ident::global("i"), Value::Num(6.into()));
         loop {
             let start = Instant::now();
             for _ in 0..NUM_LINES {
@@ -63,9 +64,9 @@ fn main() {
                 lines_per_sec,
                 ns_per_line,
             );
-            println!("globals as of right now");
-            for (name, val) in vm.globals() {
-                println!("{}: {}", name, val);
+            println!("idents as of right now");
+            for (ident, val) in vm.idents() {
+                println!("{}: {}", ident, val);
             }
         }
     }

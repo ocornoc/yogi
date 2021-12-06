@@ -1,6 +1,21 @@
 use parser::*;
 use super::*;
 
+#[derive(Debug, Clone)]
+pub struct CodegenOptions {
+    pub protect_locals: bool,
+    pub protect_globals: bool,
+}
+
+impl Default for CodegenOptions {
+    fn default() -> Self {
+        Self {
+            protect_locals: false,
+            protect_globals: true,
+        }
+    }
+}
+
 struct CodegenData {
     sections: Vec<SectionCode>,
     lines: [Section; 20],
@@ -8,8 +23,8 @@ struct CodegenData {
     numbers: Vec<Number>,
     strings: Vec<YString>,
     values: Vec<Value>,
-    locals: AHashMap<String, ValReg>,
-    globals: AHashMap<String, ValReg>,
+    idents: AHashMap<Ident, ValReg>,
+    pub options: CodegenOptions,
 }
 
 impl CodegenData {
@@ -161,11 +176,7 @@ impl CodegenData {
     }
 
     fn get_variable(&mut self, ident: Ident) -> ValReg {
-        if ident.global {
-            &mut self.globals
-        } else {
-            &mut self.locals
-        }.entry(ident.name).or_insert_with(|| {
+        self.idents.entry(ident).or_insert_with(|| {
             let v = ValReg(self.values.len());
             self.values.push(Default::default());
             v
@@ -333,9 +344,9 @@ impl CodegenData {
     }
 }
 
-impl From<parser::Program> for IRMachine {
-    fn from(program: Program) -> Self {
-        let mut codegen = CodegenData {
+impl Default for CodegenData {
+    fn default() -> Self {
+        CodegenData {
             sections: vec![SectionCode {
                 instrs: Vec::new(),
                 line_start: true,
@@ -346,8 +357,17 @@ impl From<parser::Program> for IRMachine {
             numbers: Vec::with_capacity(100),
             strings: Vec::with_capacity(100),
             values: Vec::with_capacity(100),
-            locals: AHashMap::with_capacity(100),
-            globals: AHashMap::with_capacity(20),
+            idents: AHashMap::with_capacity(100),
+            options: Default::default(),
+        }
+    }
+}
+
+impl IRMachine {
+    pub fn from_ast(options: CodegenOptions, program: parser::Program) -> Self {
+        let mut codegen = CodegenData {
+            options,
+            ..Default::default()
         };
         codegen.codegen_from_program(program);
         IRMachine {
@@ -358,7 +378,15 @@ impl From<parser::Program> for IRMachine {
             numbers: codegen.numbers.into_iter().map(AtomicRefCell::new).collect(),
             strings: codegen.strings.into_iter().map(AtomicRefCell::new).collect(),
             values: codegen.values.into_iter().map(AtomicRefCell::new).collect(),
-            globals: codegen.globals.into_iter().map(|(k, v)| (k, v.into())).collect(),
+            idents: codegen.idents
+                .into_iter()
+                .filter(|(i, _)| if i.global {
+                    codegen.options.protect_globals
+                } else {
+                    codegen.options.protect_locals
+                })
+                .map(|(k, v)| (k, v.into()))
+                .collect(),
         }
     }
 }
