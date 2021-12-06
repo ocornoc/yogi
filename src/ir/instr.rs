@@ -2,7 +2,6 @@ use std::convert::TryInto;
 use arrayvec::ArrayVec;
 use derive_more::{From, Into};
 use super::*;
-use arith::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, From, Into)]
 #[repr(align(4))]

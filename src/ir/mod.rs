@@ -9,7 +9,6 @@ use arith::*;
 use parser::Ident;
 use super::*;
 use instr::*;
-use codegen::*;
 pub use codegen::CodegenOptions;
 
 mod instr;
