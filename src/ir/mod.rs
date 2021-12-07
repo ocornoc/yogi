@@ -61,6 +61,7 @@ pub struct IRMachine {
 
 macro_rules! reg_fns {
     ($new_name:ident, $ref_name:ident, $mut_name:ident, $reg:tt, $val:ty, $field:ident) => {
+        #[allow(dead_code)]
         fn $new_name(&mut self, val: $val) -> $reg {
             let len = self.$field.len();
             self.$field.push(val.into());

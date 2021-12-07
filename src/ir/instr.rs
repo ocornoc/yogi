@@ -43,6 +43,7 @@ impl Display for Section {
     }
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(super) enum Instruction {
     JumpSectionIf(Section, NumReg),
