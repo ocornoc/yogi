@@ -7,9 +7,62 @@ use pest::{Parser, iterators::Pair};
 use pest_derive::*;
 use super::*;
 
-#[derive(Parser)]
+#[derive(Debug, Parser, Clone)]
 #[grammar = "yolol.pest"]
-struct YololParser;
+pub struct YololParser {
+    pub max_lines: usize,
+    pub max_line_length: usize,
+}
+
+impl YololParser {
+    pub const fn unrestricted() -> Self {
+        YololParser {
+            max_lines: usize::MAX,
+            max_line_length: usize::MAX,
+        }
+    }
+
+    pub fn parse(self, s: &str) -> Result<Program> {
+        let mut lines = Vec::with_capacity(20);
+
+        for line in <YololParser as Parser<_>>::parse(Rule::program, s)? {
+            match line.as_rule() {
+                Rule::line => {
+                    let length = line.as_str().trim_end().len();
+                    ensure!(
+                        length <= self.max_line_length,
+                        "Line length too long: {} bytes",
+                        length,
+                    );
+                    lines.push(Line::parse(line.into_inner())?);
+                },
+                Rule::EOI => break,
+                r => unreachable!("parse error in Program: {:?}", r),
+            }
+        }
+
+        ensure!(
+            lines.len() <= self.max_lines,
+            "Too many lines in program! Found {} of them.",
+            lines.len(),
+        );
+        // ensure the program has at least 20 lines
+        lines.extend(std::iter::repeat(Line::default()).take(20_usize.saturating_sub(lines.len())));
+
+        Ok(Program {
+            lines
+        })
+    }
+}
+
+impl Default for YololParser {
+    fn default() -> Self {
+        Self {
+            max_lines: 20,
+            max_line_length: 70,
+        }
+    }
+}
 
 #[derive(Debug, PartialEq, Eq, Clone, Hash)]
 pub struct Ident {
@@ -491,54 +544,6 @@ pub struct Program {
     pub lines: Vec<Line>,
 }
 
-impl Program {
-    pub fn parse(s: &str) -> Result<Program> {
-        let mut lines = Vec::with_capacity(20);
-
-        for line in YololParser::parse(Rule::program, s)? {
-            match line.as_rule() {
-                Rule::line => {
-                    let length = line.as_str().trim_end().len();
-                    ensure!(length <= 70, "Line length too long: {} chars", length);
-                    lines.push(Line::parse(line.into_inner())?);
-                },
-                Rule::EOI => break,
-                r => unreachable!("parse error in Program: {:?}", r),
-            }
-        }
-
-        ensure!(lines.len() <= 20, "Too many lines in program! Found {} of them.", lines.len());
-        // ensure the program has exactly 20 lines
-        lines.extend(std::iter::repeat(Line::default()).take(20 - lines.len()));
-
-        Ok(Program {
-            lines
-        })
-    }
-
-    pub fn parse_ignore_ll(s: &str) -> Result<Program> {
-        let mut lines = Vec::with_capacity(20);
-
-        for line in YololParser::parse(Rule::program, s)? {
-            match line.as_rule() {
-                Rule::line => {
-                    lines.push(Line::parse(line.into_inner())?);
-                },
-                Rule::EOI => break,
-                r => unreachable!("parse error in Program: {:?}", r),
-            }
-        }
-
-        ensure!(lines.len() <= 20, "Too many lines in program! Found {} of them.", lines.len());
-        // ensure the program has exactly 20 lines
-        lines.extend(std::iter::repeat(Line::default()).take(20 - lines.len()));
-
-        Ok(Program {
-            lines
-        })
-    }
-}
-
 impl Default for Program {
     fn default() -> Self {
         Program {
@@ -553,9 +558,9 @@ mod tests {
 
     #[test]
     fn empty_test() -> Result<()> {
-        let program = Program::parse("")?;
+        let program = YololParser::default().parse("")?;
         assert_eq!(program, Program::default());
-        let program = Program::parse("
+        let program = YololParser::default().parse("
         
         ")?;
         assert_eq!(program, Program::default());
@@ -564,7 +569,7 @@ mod tests {
 
     #[test]
     fn simple_comment_test() -> Result<()> {
-        let program = Program::parse("// WOW!
+        let program = YololParser::default().parse("// WOW!
         
         // huh?
         // wow // crazy  ")?;
@@ -574,7 +579,7 @@ mod tests {
 
     #[test]
     fn assignment() -> Result<()> {
-        let program = Program::parse("\
+        let program = YololParser::default().parse("\
         x=2 y = 5 :abc = -2 a=a!=a :x+=1+2 :w-=3 f*=\"hi\"\n\
         a=c<=:d :_Wab323 %=b++
         ")?;
@@ -613,7 +618,7 @@ mod tests {
 
     #[test]
     fn if_then_else() -> Result<()> {
-        let program = Program::parse("\
+        let program = YololParser::default().parse("\
         if 2 then x = 22 else goto 2 end
         if x==2 then goto x++ goto 3 / 4 else y -= x--end
         if 2*--_ then if x then x^=2 end else end
@@ -653,7 +658,7 @@ mod tests {
 
     #[test]
     fn inc_stmt_test() -> Result<()> {
-        let program = Program::parse("\
+        let program = YololParser::default().parse("\
         x-- x++ ++x --x
         ")?;
         let base = Incdec {
@@ -677,7 +682,7 @@ mod tests {
 
     #[test]
     fn assoc_test() -> Result<()> {
-        let program = Program::parse("\
+        let program = YololParser::default().parse("\
         y=a+b+c+(d+e)
         y=a*b*c*(d*e)
         y=(a^b)^c^d^e

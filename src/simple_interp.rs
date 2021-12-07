@@ -221,7 +221,7 @@ mod tests {
     use super::*;
 
     fn tester(should_pass: bool, src: &str) {
-        let mut interp = SimpleInterp::new(Program::parse(src).unwrap());
+        let mut interp = SimpleInterp::new(YololParser::unrestricted().parse(src).unwrap());
         interp.step_lines(10_000);
         if should_pass {
             assert_eq!(interp.values()[&Ident::global("output")], Value::Str("ok".into()));
@@ -578,5 +578,10 @@ u/=x!=-22877332.428 :OUTPUT="Failed #3 : " + x goto8
 :OUTPUT="ok"
 goto8"#
         );
+    }
+
+    #[test]
+    fn many_lines() {
+        tester(true, &("\n".repeat(30) + r#":output="ok" goto30"#));
     }
 }

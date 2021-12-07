@@ -50,7 +50,7 @@ pub struct IRMachine {
     #[index]
     #[index_mut]
     sections: Vec<SectionCode>,
-    lines: [Section; 20],
+    lines: Vec<Section>,
     current_sect: Section,
     runtime_err: AtomicBool,
     numbers: Vec<AtomicRefCell<Number>>,
@@ -388,8 +388,8 @@ impl IRMachine {
                 true
             },
             SectionOrLine::Line(l) => {
-                let line = self.num_ref(l).unwrap().as_f32().clamp(1.0, 20.0) as usize - 1;
-                self.current_sect = self.lines[line];
+                let line = self.num_ref(l).unwrap().as_f32() as usize;
+                self.current_sect = self.lines[line.clamp(1, self.lines.len()) - 1];
                 false
             },
         }
@@ -524,7 +524,7 @@ impl Clone for IRMachine {
 
     fn clone_from(&mut self, source: &Self) {
         self.sections.clone_from(&source.sections);
-        self.lines = source.lines;
+        self.lines.clone_from(&source.lines);
         self.current_sect = source.current_sect;
         *self.runtime_err.get_mut() = source.runtime_err.load(Ordering::Relaxed);
         self.numbers.clone_from(&source.numbers);
@@ -540,8 +540,8 @@ mod tests {
     use crate::parser::*;
     use super::*;
 
-    fn tester(src: &str) {
-        let program = Program::parse(src).unwrap();
+    fn tester(src: &(impl AsRef<str> + ?Sized)) {
+        let program = YololParser::unrestricted().parse(src.as_ref()).unwrap();
         let mut simple_interp = SimpleInterp::new(program.clone());
         let mut ir_machine = IRMachine::from_ast(
             CodegenOptions {
@@ -908,5 +908,10 @@ u/=x!=-22877332.428 :OUTPUT="Failed #3 : " + x goto8
 :OUTPUT="ok"
 goto8"#
         );
+    }
+
+    #[test]
+    fn many_lines() {
+        tester(&("\n".repeat(30) + r#":output="ok" goto30"#));
     }
 }

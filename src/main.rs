@@ -1,7 +1,7 @@
 use std::convert::*;
 use std::time::Instant;
 use arith:: Value;
-use parser::Ident;
+use parser::{YololParser, Ident};
 
 mod parser;
 mod arith;
@@ -9,7 +9,7 @@ mod simple_interp;
 mod ir;
 
 fn script() -> parser::Program {
-    parser::Program::parse_ignore_ll(
+    YololParser::unrestricted().parse(
 r#"a="_1" b="__1" c="____" d=c+c c+=1 e=d+d d+=1 f=e+e e+=1 g=f+f f+=1 h=g+g
 g+=1 i=h+h h+=1 j=i+i i+=1 j+=1
 l=1023-:i m=l>511 l%=512 n=l>255 l%=256 o=l>127 l%=128 p=l>63 l%=64 q=l>31

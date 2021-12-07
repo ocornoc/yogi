@@ -18,7 +18,7 @@ impl Default for CodegenOptions {
 
 struct CodegenData {
     sections: Vec<SectionCode>,
-    lines: [Section; 20],
+    lines: Vec<Section>,
     current_line: usize,
     numbers: Vec<Number>,
     strings: Vec<YString>,
@@ -28,8 +28,8 @@ struct CodegenData {
 }
 
 impl CodegenData {
-    const fn next_line(&self) -> usize {
-        if self.current_line == 19 {
+    fn next_line(&self) -> usize {
+        if self.current_line == self.lines.len() - 1 {
             0
         } else {
             self.current_line + 1
@@ -347,12 +347,8 @@ impl CodegenData {
 impl Default for CodegenData {
     fn default() -> Self {
         CodegenData {
-            sections: vec![SectionCode {
-                instrs: Vec::new(),
-                line_start: true,
-                success: SUCCESS_NEEDS_FIXING,
-            }; 20],
-            lines: (0..20).map(Section).collect::<Vec<_>>().try_into().unwrap(),
+            sections: vec![],
+            lines: vec![],
             current_line: 0,
             numbers: Vec::with_capacity(100),
             strings: Vec::with_capacity(100),
@@ -366,6 +362,12 @@ impl Default for CodegenData {
 impl IRMachine {
     pub fn from_ast(options: CodegenOptions, program: parser::Program) -> Self {
         let mut codegen = CodegenData {
+            sections: vec![SectionCode {
+                instrs: Vec::new(),
+                line_start: true,
+                success: SUCCESS_NEEDS_FIXING,
+            }; program.len()],
+            lines: (0..program.len()).map(Section).collect::<Vec<_>>().try_into().unwrap(),
             options,
             ..Default::default()
         };
