@@ -4,7 +4,7 @@ use derive_more::{From, Into};
 use super::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, From, Into)]
-#[repr(align(4))]
+#[repr(align(8))]
 pub(super) struct NumReg(pub usize);
 
 impl Display for NumReg {
@@ -14,7 +14,7 @@ impl Display for NumReg {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, From, Into)]
-#[repr(align(4))]
+#[repr(align(8))]
 pub(super) struct StrReg(pub usize);
 
 impl Display for StrReg {
@@ -24,7 +24,7 @@ impl Display for StrReg {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, From, Into)]
-#[repr(align(4))]
+#[repr(align(8))]
 pub(super) struct ValReg(pub usize);
 
 impl Display for ValReg {
@@ -34,6 +34,7 @@ impl Display for ValReg {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, From, Into)]
+#[repr(align(8))]
 pub(super) struct Section(pub usize);
 
 impl Display for Section {
