@@ -1,12 +1,8 @@
 use std::convert::*;
 use std::time::Instant;
+use yogi::*;
 use arith:: Value;
 use parser::{YololParser, Ident};
-
-mod parser;
-mod arith;
-mod simple_interp;
-mod ir;
 
 fn script() -> parser::Program {
     YololParser::unrestricted().parse(

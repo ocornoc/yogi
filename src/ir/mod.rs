@@ -506,6 +506,10 @@ impl IRMachine {
 
         Ok(())
     }
+
+    pub fn get_current_line(&self) -> Option<usize> {
+        self.lines.iter().enumerate().find(|(_, &s)| s == self.current_sect).map(|(i, _)| i)
+    }
 }
 
 impl Clone for IRMachine {

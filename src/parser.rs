@@ -1,5 +1,6 @@
 use std::ops::*;
 use std::fmt::{Display, Formatter, Result as FmtResult};
+use std::str::FromStr;
 use anyhow::*;
 use derive_more::{Deref, DerefMut};
 use arith::{Number, YString};
@@ -96,6 +97,15 @@ impl Ident {
             },
             global: pair.as_rule() == Rule::global_ident,
         }
+    }
+}
+
+impl FromStr for Ident {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self> {
+        let mut ident = <YololParser as Parser<_>>::parse(Rule::ident, s)?;
+        Ok(Self::parse(ident.next().unwrap().into_inner()))
     }
 }
 
