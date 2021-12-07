@@ -552,6 +552,12 @@ mod tests {
     }
 
     #[test]
+    fn multiply_huge()
+    {
+        tester("x=asin999 c=1*x if c==0then:output=\"ok\"else:output=\":(\"end goto1");
+    }
+
+    #[test]
     fn acid_acos() {
         tester(
 r#"x=acos(0)
