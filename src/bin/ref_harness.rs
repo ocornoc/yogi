@@ -1,15 +1,13 @@
-use std::convert::*;
 use std::time::*;
 use std::io::{stdin, stdout, Read};
 use yogi::{arith::Value, parser::{YololParser, Ident}, ir::{IRMachine, CodegenOptions}};
 use clap::clap_app;
 use anyhow::Result;
 use serde::Serialize;
-use derive_more::From;
 
-#[derive(Debug, Serialize, From)]
+#[derive(Debug, Serialize)]
 enum DataValue {
-    Number(i64),
+    Number(String),
     String(String),
 }
 
@@ -46,8 +44,8 @@ fn print_results(vm: &IRMachine, elapsed_s: f32, elapsed_l: usize, samples: Vec<
                 name: i.name.clone(),
                 global: i.global,
                 value: match v {
-                    Value::Num(n) => n.0.into(),
-                    Value::Str(s) => s.to_string().into(),
+                    Value::Num(n) => DataValue::Number(n.to_string()),
+                    Value::Str(s) => DataValue::String(s.to_string()),
                 },
             })
             .collect(),
