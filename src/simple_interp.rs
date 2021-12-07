@@ -233,7 +233,7 @@ mod tests {
     #[test]
     fn multiply_huge()
     {
-        tester(true, "x=asin999 c=1*x if c==0then:output=\"ok\"else:output=\":(\"end goto1");
+        tester(true, r#"x=asin999 c=1*x if c==0then:output="ok"else:output=":("end goto1"#);
     }
 
     #[test]
