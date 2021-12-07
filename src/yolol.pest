@@ -65,4 +65,5 @@ number = @{ "-"? ~ ASCII_DIGIT+ ~ ("." ~ ASCII_DIGIT+)? }
 string = ${ string_quote ~ (!string_quote ~ string_char)* ~ string_quote }
 string_quote = _{ "\"" }
 string_char = @{ ("\\" ~ escaped) | ANY }
-escaped = @{ "\\" ~ ("b" | "f" | "n" | "r" | "t" | "\\" | "\"") }
+escaped = @{ "\\" ~ ("b" | "f" | "n" | "r" | "t" | "\\" | "\"" | unicode) }
+unicode = @{ "u" ~ ASCII_HEX_DIGIT{1, 6} }

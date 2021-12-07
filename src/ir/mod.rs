@@ -6,9 +6,10 @@ use derive_more::{Index, IndexMut, From, Display};
 use atomic_refcell::AtomicRefCell;
 use ahash::AHashMap;
 use arith::*;
+use parser::Ident;
 use super::*;
 use instr::*;
-use codegen::*;
+pub use codegen::CodegenOptions;
 
 mod instr;
 mod codegen;
@@ -55,7 +56,7 @@ pub struct IRMachine {
     numbers: Vec<AtomicRefCell<Number>>,
     strings: Vec<AtomicRefCell<YString>>,
     values: Vec<AtomicRefCell<Value>>,
-    globals: AHashMap<String, AnyReg>,
+    idents: AHashMap<Ident, AnyReg>,
 }
 
 macro_rules! reg_fns {
@@ -415,8 +416,8 @@ impl IRMachine {
         }
     }
 
-    pub fn clone_global(&self, name: &'_ str) -> Value {
-        match self.globals.get(name) {
+    pub fn get_ident_value(&self, ident: &Ident) -> Value {
+        match self.idents.get(ident) {
             Some(&AnyReg::Num(n)) => self.num_ref(n).unwrap().deref().clone().into(),
             Some(&AnyReg::Str(s)) => self.str_ref(s).unwrap().deref().clone().into(),
             Some(&AnyReg::Val(v)) => self.val_ref(v).unwrap().deref().clone(),
@@ -424,14 +425,14 @@ impl IRMachine {
         }
     }
 
-    pub fn globals(&self) -> impl IntoIterator<Item = (&str, Value)> + '_ {
-        self.globals
+    pub fn idents(&self) -> impl IntoIterator<Item = (&Ident, Value)> + '_ {
+        self.idents
             .iter()
-            .map(|(s, _)| (s.as_str(), self.clone_global(&s)))
+            .map(|(s, _)| (s, self.get_ident_value(&s)))
     }
 
-    pub fn set_global(&mut self, name: &str, val: Value) {
-        if let Some(&reg) = self.globals.get(name) {
+    pub fn set_ident(&mut self, ident: &Ident, val: Value) {
+        if let Some(&reg) = self.idents.get(ident) {
             match (reg, val) {
                 (AnyReg::Num(r), Value::Num(n)) => {
                     *self.num_mut(r).unwrap() = n;
@@ -442,7 +443,7 @@ impl IRMachine {
                 (AnyReg::Val(r), val) => {
                     *self.val_mut(r).unwrap() = val;
                 },
-                (_, _) => panic!("Tried to set ':{}' to incorrect type", name),
+                (_, _) => panic!("Tried to set '{}' to incorrect type", ident),
             }
         }
     }
@@ -458,8 +459,8 @@ impl IRMachine {
 
         writeln!(sink, "Globals:")?;
 
-        for (name, &reg) in self.globals.iter() {
-            writeln!(sink, "`:{}` is {}", name, reg)?;
+        for (ident, &reg) in self.idents.iter() {
+            writeln!(sink, "`{}` is {}", ident, reg)?;
         }
 
         writeln!(sink)?;
@@ -517,7 +518,7 @@ impl Clone for IRMachine {
             numbers: self.numbers.clone(),
             strings: self.strings.clone(),
             values: self.values.clone(),
-            globals: self.globals.clone(),
+            idents: self.idents.clone(),
         }
     }
 
@@ -529,7 +530,7 @@ impl Clone for IRMachine {
         self.numbers.clone_from(&source.numbers);
         self.strings.clone_from(&source.strings);
         self.values.clone_from(&source.values);
-        self.globals.clone_from(&source.globals);
+        self.idents.clone_from(&source.idents);
     }
 }
 
@@ -542,13 +543,21 @@ mod tests {
     fn tester(src: &str) {
         let program = Program::parse(src).unwrap();
         let mut simple_interp = SimpleInterp::new(program.clone());
-        let mut ir_machine = IRMachine::from(program);
+        let mut ir_machine = IRMachine::from_ast(
+            CodegenOptions {
+                protect_locals: true,
+                protect_globals: true,
+            },
+            program,
+        );
         simple_interp.step_lines(10_000);
         ir_machine.step_repeat(1_000);
-        assert_eq!(
-            simple_interp.values()[&Ident::global("output")],
-            ir_machine.clone_global("output"),
-        );
+        for (ident, value) in simple_interp.values() {
+            assert_eq!(
+                *value,
+                ir_machine.get_ident_value(ident),
+            );
+        }
     }
 
     #[test]

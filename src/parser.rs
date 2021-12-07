@@ -1,4 +1,5 @@
 use std::ops::*;
+use std::fmt::{Display, Formatter, Result as FmtResult};
 use anyhow::*;
 use derive_more::{Deref, DerefMut};
 use arith::{Number, YString};
@@ -17,7 +18,7 @@ pub struct Ident {
 }
 
 impl Ident {
-   pub  fn local(name: &str) -> Self {
+   pub fn local(name: &str) -> Self {
         Ident {
             name: name.to_lowercase(),
             global: false,
@@ -42,6 +43,16 @@ impl Ident {
             },
             global: pair.as_rule() == Rule::global_ident,
         }
+    }
+}
+
+impl Display for Ident {
+    fn fmt(&self, f: &mut Formatter) -> FmtResult {
+        if self.global {
+            f.write_str(":")?;
+        }
+
+        f.write_str(&self.name)
     }
 }
 
@@ -232,9 +243,21 @@ impl Expr {
                     Rule::string => Ok(Expr::String({
                         let mut new = String::new();
                         let mut escaped = false;
+                        let mut unicode = false;
+                        let mut unicode_cp = String::with_capacity(6);
                         let s = pair.as_str();
                         for c in s[1..s.len() - 1].chars() {
-                            if escaped {
+                            if unicode && if c.is_ascii_hexdigit() && unicode_cp.len() < 6 {
+                                true
+                            } else {
+                                unicode = false;
+                                escaped = false;
+                                new.push(parse_codepoint(&unicode_cp));
+                                unicode_cp.clear();
+                                false
+                            } {
+                                unicode_cp.push(c);
+                            } else if escaped {
                                 new.push(match c {
                                     '\\' => '\\',
                                     'b' => '\x08',
@@ -243,6 +266,10 @@ impl Expr {
                                     'r' => '\r',
                                     't' => '\t',
                                     '"' => '"',
+                                    'u' => {
+                                        unicode = true;
+                                        continue;
+                                    },
                                     _ => unreachable!(),
                                 });
                                 escaped = false;
@@ -262,6 +289,10 @@ impl Expr {
             r => unreachable!("parse error in Expr: {:?}", r),
         }
     }
+}
+
+fn parse_codepoint(_s: &str) -> char {
+    todo!("Haven't added unicde codepoint parsing yet. Someday, if yolol even supports it!")
 }
 
 impl<T: Into<Number>> From<T> for Expr {

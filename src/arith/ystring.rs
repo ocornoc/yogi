@@ -3,19 +3,19 @@ use derive_more::Deref;
 use arrayvec::ArrayVec;
 use super::*;
 
-const MAX_STRING_CHARS: usize = 1024;
+const MAX_STRING_BYTES: usize = 1024;
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Default, Deref)]
 pub struct YString {
     #[deref]
-    pub(super) data: Box<ArrayVec<char, MAX_STRING_CHARS>>,
+    pub(super) data: Box<ArrayVec<u8, MAX_STRING_BYTES>>,
 }
 
 impl YString {
     #[inline]
     #[allow(unused_must_use)]
     pub fn pre_inc(&mut self) {
-        self.data.try_push(' ');
+        self.data.try_push(b' ');
     }
 
     #[inline]
@@ -34,7 +34,7 @@ impl YString {
 
     #[inline]
     pub fn duplicate(&mut self) {
-        self.data.extend(self.data.clone().into_iter().take(MAX_STRING_CHARS - self.data.len()));
+        self.data.extend(self.data.clone().into_iter().take(MAX_STRING_BYTES - self.data.len()));
     }
 }
 
@@ -52,14 +52,14 @@ impl Clone for YString {
 
 impl Display for YString {
     fn fmt(&self, f: &mut Formatter) -> FmtResult {
-        write!(f, "{}", self.data.iter().collect::<String>())
+        write!(f, "{}", String::from_utf8_lossy(self.data.as_slice()))
     }
 }
 
 impl<T: Into<String>> From<T> for YString {
     fn from(string: T) -> Self {
         YString {
-            data: Box::new(string.into().chars().collect()),
+            data: Box::new(string.into().bytes().collect()),
         }
     }
 }
@@ -67,7 +67,7 @@ impl<T: Into<String>> From<T> for YString {
 impl AddAssign<&'_ Self> for YString {
     fn add_assign(&mut self, rhs: &Self) {
         self.data
-            .try_extend_from_slice(&rhs[0..rhs.len().min(MAX_STRING_CHARS - self.len())])
+            .try_extend_from_slice(&rhs[0..rhs.len().min(MAX_STRING_BYTES - self.len())])
             .unwrap_or_else(|_| if cfg!(debug_assertions) {
                 unreachable!()
             } else {
