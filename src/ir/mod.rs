@@ -13,6 +13,7 @@ pub use codegen::CodegenOptions;
 
 mod instr;
 mod codegen;
+mod cfg;
 
 const SUCCESS_NEEDS_FIXING: SectionOrLine = SectionOrLine::Section(Section(!0));
 
@@ -510,6 +511,10 @@ impl IRMachine {
 
     pub fn get_current_line(&self) -> Option<usize> {
         self.lines.iter().enumerate().find(|(_, &s)| s == self.current_sect).map(|(i, _)| i)
+    }
+
+    pub fn set_next_line(&mut self, line: usize) {
+        self.current_sect = self.lines[line];
     }
 }
 

@@ -85,6 +85,7 @@ fn setup_and_bench(
     stop_flag: Ident,
     mut max_lines: usize,
     max_dur: Option<Duration>,
+    start_line: usize,
     _terminate_pc_of: bool,
 ) -> Result<()> {
     let orig_max_lines = max_lines;
@@ -94,6 +95,7 @@ fn setup_and_bench(
         protect_locals: true,
         protect_globals: true,
     }, program);
+    vm.set_next_line(start_line);
     let outer_iters = max_lines / 1000;
     let mut samples = Vec::with_capacity(outer_iters);
 
@@ -151,6 +153,7 @@ fn main() {
         (@arg STOP_FLAG: -f --("stop-flag") +takes_value "The variable used to detect stopping")
         (@arg MAX_STEPS: -s --("max-steps") +takes_value "The maximum number of steps (lines) before timeout")
         (@arg MAX_SEC: -t --("max-sec") +takes_value "The maximum amount of seconds before timeout")
+        (@arg START_PC: --("start-pc") +takes_value "The starting line")
         (@arg TERMINATE_PC_OF: --("term-pc-of") "Terminate on program counter overflow")
     ).get_matches();
     let stop_flag: Ident = matches.value_of("STOP_FLAG").unwrap_or(":done").parse().unwrap();
@@ -166,8 +169,14 @@ fn main() {
         .transpose()
         .unwrap()
         .map(Duration::from_secs_f32);
+    let start_line = matches
+        .value_of("START_PC")
+        .map(str::parse)
+        .transpose()
+        .unwrap()
+        .unwrap_or(0);
     let terminate_pc_of = matches.is_present("TERMINATE_PC_OF");
-    if let Err(e) = setup_and_bench(stop_flag, max_lines, max_dur, terminate_pc_of) {
+    if let Err(e) = setup_and_bench(stop_flag, max_lines, max_dur, start_line, terminate_pc_of) {
         #[derive(Debug, Serialize)]
         struct Err {
             error: String,

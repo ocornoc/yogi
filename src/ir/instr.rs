@@ -139,6 +139,99 @@ impl Instruction {
         array
     }
 
+    pub const fn get_section(self) -> Option<Section> {
+        if let Instruction::JumpSectionIf(s, _) | Instruction::JumpIfError(s) = self {
+            Some(s)
+        } else {
+            None
+        }
+    }
+
+    fn get_mut_num_regs(&mut self) -> ArrayVec<&mut NumReg, 2> {
+        match self {
+            Instruction::JumpSectionIf(_, n) | Instruction::Abs(n) | Instruction::Fact(n)
+            | Instruction::Sqrt(n) | Instruction::Sin(n) | Instruction::Cos(n) | Instruction::Tan(n)
+            | Instruction::Asin(n) | Instruction::Acos(n) | Instruction::Atan(n)
+            | Instruction::Neg(n) | Instruction::IncNum(n) | Instruction::DecNum(n)
+            | Instruction::ValueifyNum(n, _) | Instruction::NumberifyVal(_, n)
+            | Instruction::StringifyNum(n, _) | Instruction::IsTruthyNum(n)
+            | Instruction::IsTruthyVal(_, n) | Instruction::NotNum(n) | Instruction::NotVal(_, n)
+            | Instruction::Eq(_, _, n) | Instruction::Le(_, _, n) | Instruction::Lt(_, _, n) =>
+                [n].into_iter().collect(),
+            Instruction::CopyNum(n1, n2) | Instruction::AddNum(n1, n2) | Instruction::SubNum(n1, n2)
+            | Instruction::Mul(n1, n2) | Instruction::Div(n1, n2) | Instruction::Rem(n1, n2)
+            | Instruction::Pow(n1, n2) | Instruction::And(n1, n2) | Instruction::Or(n1, n2) =>
+                [n1, n2].into(),
+            _ => ArrayVec::new_const(),
+        }
+    }
+
+    fn get_mut_str_regs(&mut self) -> ArrayVec<&mut StrReg, 2> {
+        match self {
+            Instruction::ValueifyStr(s, _) | Instruction::StringifyNum(_, s)
+            | Instruction::StringifyVal(_, s) | Instruction::IncStr(s) | Instruction::DecStr(s) =>
+                [s].into_iter().collect(),
+            Instruction::AddStr(s1, s2) | Instruction::SubStr(s1, s2)
+            | Instruction::CopyStr(s1, s2) => [s1, s2].into(),
+            _ => ArrayVec::new_const(),
+        }
+    }
+
+    fn get_mut_val_regs(&mut self) -> ArrayVec<&mut ValReg, 2> {
+        match self {
+            Instruction::ValueifyNum(_, v) | Instruction::ValueifyStr(_, v)
+            | Instruction::NumberifyVal(v, _) | Instruction::StringifyVal(v, _)
+            | Instruction::IsTruthyVal(v, _) | Instruction::NotVal(v, _) | Instruction::IncVal(v)
+            | Instruction::DecVal(v) => [v].into_iter().collect(),
+            Instruction::CopyVal(v1, v2) | Instruction::AddVal(v1, v2) | Instruction::SubVal(v1, v2)
+            | Instruction::Eq(v1, v2, _) | Instruction::Le(v1, v2, _)
+            | Instruction::Lt(v1, v2, _) => [v1, v2].into(),
+            _ => ArrayVec::new_const(),
+        }
+    }
+
+    pub fn remove_reg(&mut self, reg: AnyReg) {
+        match reg {
+            AnyReg::Num(n) => {
+                for r in self.get_mut_num_regs() {
+                    if r.0 > n.0 {
+                        r.0 -= 1;
+                    } else if *r == n {
+                        panic!("Tried to get rid of reg {}", n);
+                    }
+                }
+            },
+            AnyReg::Str(s) => {
+                for r in self.get_mut_str_regs() {
+                    if r.0 > s.0 {
+                        r.0 -= 1;
+                    } else if *r == s {
+                        panic!("Tried to get rid of reg {}", s);
+                    }
+                }
+            },
+            AnyReg::Val(v) => {
+                for r in self.get_mut_val_regs() {
+                    if r.0 > v.0 {
+                        r.0 -= 1;
+                    } else if *r == v {
+                        panic!("Tried to get rid of reg {}", v);
+                    }
+                }
+            },
+        }
+    }
+
+    pub fn remove_section(&mut self, section: Section) {
+        if let Instruction::JumpSectionIf(s, _) | Instruction::JumpIfError(s) = self {
+            if s.0 > section.0 {
+                s.0 -= 1;
+            } else if *s == section {
+                panic!("Tried to get rid of section {}", s);
+            }
+        }
+    }
+
     pub const fn can_runtime_err(self) -> bool {
         matches!(
             self,
