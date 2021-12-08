@@ -57,6 +57,15 @@ fn print_results(vm: &IRMachine, elapsed_s: f32, elapsed_l: usize, samples: Vec<
     serde_json::to_writer(stdout(), &results).unwrap();
 }
 
+fn set_core_affinity() {
+    core_affinity::set_for_current(core_affinity::get_core_ids()
+        .unwrap()
+        .into_iter()
+        .last()
+        .unwrap()
+    );
+}
+
 fn main() -> Result<()> {
     let matches = clap_app!(yogi_ref_harness =>
         (version: "0.1")
@@ -94,6 +103,7 @@ fn main() -> Result<()> {
     let outer_iters = max_lines / 1000;
     let mut samples = Vec::with_capacity(outer_iters);
     let start = Instant::now();
+    set_core_affinity();
 
     'outer: for _ in 0..=outer_iters {
         if let Some(max_dur) = max_dur {
