@@ -13,7 +13,6 @@ pub use codegen::CodegenOptions;
 
 mod instr;
 mod codegen;
-mod cfg;
 
 const SUCCESS_NEEDS_FIXING: SectionOrLine = SectionOrLine::Section(Section(!0));
 
