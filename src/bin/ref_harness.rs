@@ -97,7 +97,7 @@ fn setup_and_bench(
     }, program);
     vm.set_next_line(start_line);
     let outer_iters = max_lines / 1000;
-    let mut samples = Vec::with_capacity(outer_iters);
+    let mut samples = Vec::with_capacity(outer_iters.min(1_000_000));
 
     for vd in vars {
         let ident = Ident {
