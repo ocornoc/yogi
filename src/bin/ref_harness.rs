@@ -169,21 +169,28 @@ fn main() {
         .map(str::parse)
         .transpose()
         .unwrap()
-        .unwrap_or(usize::MAX);
+        .unwrap_or(u32::MAX);
     let max_dur = matches
         .value_of("MAX_SEC")
         .map(str::parse)
         .transpose()
         .unwrap()
         .map(Duration::from_secs_f32);
-    let start_line = matches
+    let start_line: u32 = matches
         .value_of("START_PC")
         .map(str::parse)
         .transpose()
         .unwrap()
         .unwrap_or(0);
     let terminate_pc_of = matches.is_present("TERMINATE_PC_OF");
-    if let Err(e) = setup_and_bench(stop_flag, max_lines, max_dur, start_line, terminate_pc_of) {
+    let e = setup_and_bench(
+        stop_flag,
+        max_lines as usize,
+        max_dur,
+        start_line as usize,
+        terminate_pc_of,
+    );
+    if let Err(e) = e {
         #[derive(Debug, Serialize)]
         struct Err {
             error: String,
