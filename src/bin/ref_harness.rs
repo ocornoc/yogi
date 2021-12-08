@@ -69,7 +69,14 @@ fn set_core_affinity() {
 }
 
 fn read_vars() -> Result<Vec<VarData>> {
-    serde_json::from_reader(stdin()).map_err(|e| e.into())
+    let mut bytes = Vec::with_capacity(100);
+    for c in stdin().lock().bytes() {
+        match c? {
+            b'\0' => break,
+            c => bytes.push(c),
+        }
+    }
+    serde_json::from_slice(&bytes).map_err(|e| e.into())
 }
 
 fn read_program() -> Result<yogi::parser::Program> {
