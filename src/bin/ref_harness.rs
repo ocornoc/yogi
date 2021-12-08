@@ -72,7 +72,7 @@ fn read_vars() -> Result<Vec<VarData>> {
     let mut bytes = Vec::with_capacity(100);
     for c in stdin().lock().bytes() {
         match c? {
-            b'\0' => break,
+            0 => break,
             c => bytes.push(c),
         }
     }
