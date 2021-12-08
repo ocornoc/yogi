@@ -3,15 +3,15 @@ use std::io::{stdin, stdout, Read};
 use yogi::{arith::Value, parser::{YololParser, Ident}, ir::{IRMachine, CodegenOptions}};
 use clap::clap_app;
 use anyhow::Result;
-use serde::Serialize;
+use serde::{Serialize, Deserialize};
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 enum DataValue {
     Number(String),
     String(String),
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 struct VarData {
     pub name: String,
     pub global: bool,
@@ -25,10 +25,11 @@ struct DataResults {
     pub mean_lps: f32,
     pub stddev_lps: f32,
     pub current_line: usize,
+    pub elapsed_lines: usize,
 }
 
-fn print_results(vm: &IRMachine, elapsed_s: f32, elapsed_l: usize, samples: Vec<f32>) {
-    let mean_lps = elapsed_l as f32 / elapsed_s;
+fn print_results(vm: &IRMachine, elapsed_s: f32, elapsed_lines: usize, samples: Vec<f32>) {
+    let mean_lps = elapsed_lines as f32 / elapsed_s;
     let mean_spl = mean_lps.recip();
     let top: f32 = samples
         .iter()
@@ -53,6 +54,7 @@ fn print_results(vm: &IRMachine, elapsed_s: f32, elapsed_l: usize, samples: Vec<
         mean_lps,
         stddev_lps,
         current_line: vm.get_current_line().map(|i| i + 1).unwrap_or(usize::MAX),
+        elapsed_lines,
     };
     serde_json::to_writer(stdout(), &results).unwrap();
 }
@@ -66,44 +68,48 @@ fn set_core_affinity() {
     );
 }
 
-fn main() -> Result<()> {
-    let matches = clap_app!(yogi_ref_harness =>
-        (version: "0.1")
-        (author: "Grayson Burton <ocornoc@protonmail.com>")
-        (@arg STOP_FLAG: -f --("stop-flag") +takes_value "The variable used to detect stopping")
-        (@arg MAX_STEPS: -s --("max-steps") +takes_value "The maximum number of steps (lines) before timeout")
-        (@arg MAX_SEC: -t --("max-sec") +takes_value "The maximum amount of seconds before timeout")
-    ).get_matches();
-    let stop_flag: Ident = matches.value_of("STOP_FLAG").unwrap_or(":done").parse()?;
-    let mut max_lines = matches
-        .value_of("MAX_STEPS")
-        .map(str::parse)
-        .transpose()?
-        .unwrap_or(usize::MAX);
-    let orig_max_lines = max_lines;
-    let max_dur = matches
-        .value_of("MAX_SEC")
-        .map(str::parse)
-        .transpose()?
-        .map(Duration::from_secs_f32);
-    if let Some(max_dur) = max_dur {
-        assert!(max_dur.as_secs_f32() > 0.0);
-    }
+fn read_vars() -> Result<Vec<VarData>> {
+    serde_json::from_reader(stdin()).map_err(|e| e.into())
+}
 
+fn read_program() -> Result<yogi::parser::Program> {
     let mut s = String::with_capacity(1000);
     stdin().read_to_string(&mut s)?;
-    let program = YololParser {
+    YololParser {
         max_line_length: 70,
         ..YololParser::unrestricted()
-    }.parse(&s)?;
+    }.parse(&s)
+}
+
+fn setup_and_bench(
+    stop_flag: Ident,
+    mut max_lines: usize,
+    max_dur: Option<Duration>,
+    _terminate_pc_of: bool,
+) -> Result<()> {
+    let orig_max_lines = max_lines;
+    let vars = read_vars()?;
+    let program = read_program()?;
     let mut vm = IRMachine::from_ast(CodegenOptions {
         protect_locals: true,
         protect_globals: true,
     }, program);
     let outer_iters = max_lines / 1000;
     let mut samples = Vec::with_capacity(outer_iters);
-    let start = Instant::now();
+
+    for vd in vars {
+        let ident = Ident {
+            name: vd.name,
+            global: vd.global,
+        };
+        vm.set_ident(&ident, match vd.value {
+            DataValue::Number(n) => Value::Num(n.parse()?),
+            DataValue::String(s) => Value::Str(s.into()),
+        });
+    }
+
     set_core_affinity();
+    let start = Instant::now();
 
     'outer: for _ in 0..=outer_iters {
         if let Some(max_dur) = max_dur {
@@ -135,6 +141,40 @@ fn main() -> Result<()> {
         orig_max_lines - max_lines,
         iter.map(|d| d.as_secs_f32()).collect(),
     );
-
     Ok(())
+}
+
+fn main() {
+    let matches = clap_app!(yogi_ref_harness =>
+        (version: "0.2")
+        (author: "Grayson Burton <ocornoc@protonmail.com>")
+        (@arg STOP_FLAG: -f --("stop-flag") +takes_value "The variable used to detect stopping")
+        (@arg MAX_STEPS: -s --("max-steps") +takes_value "The maximum number of steps (lines) before timeout")
+        (@arg MAX_SEC: -t --("max-sec") +takes_value "The maximum amount of seconds before timeout")
+        (@arg TERMINATE_PC_OF: --("term-pc-of") "Terminate on program counter overflow")
+    ).get_matches();
+    let stop_flag: Ident = matches.value_of("STOP_FLAG").unwrap_or(":done").parse().unwrap();
+    let max_lines = matches
+        .value_of("MAX_STEPS")
+        .map(str::parse)
+        .transpose()
+        .unwrap()
+        .unwrap_or(usize::MAX);
+    let max_dur = matches
+        .value_of("MAX_SEC")
+        .map(str::parse)
+        .transpose()
+        .unwrap()
+        .map(Duration::from_secs_f32);
+    let terminate_pc_of = matches.is_present("TERMINATE_PC_OF");
+    if let Err(e) = setup_and_bench(stop_flag, max_lines, max_dur, terminate_pc_of) {
+        #[derive(Debug, Serialize)]
+        struct Err {
+            error: String,
+        }
+
+        serde_json::to_writer(stdout(), &Err {
+            error: format!("{}", e),
+        }).unwrap();
+    }
 }
