@@ -929,4 +929,40 @@ goto8"#
     fn many_lines() {
         tester(&("\n".repeat(30) + r#":output="ok" goto30"#));
     }
+
+    #[test]
+    fn black_friday_zijkhal() {
+        let src =
+r#":i="8591433801" a="*********"i=a+9p+=a goto++k/57
+h=a--+8g=a--+7f=a--+6e=a--+5d=a--+4c=a--+3b=a--+2a="*1"
+t=:i+:i q=p-0+t-a-b-c-d-e-f-g-h-i-0s=q+t z=s l=s-z--
+q=q+l-a-b-c-d-e-f-g-h-i-0s=q+t z=s m=s-z--q=q+m-a-b-c-d-e-f-g-h-i-0s=q+t+t
+z=s n=s-z--q=q+n-a-b-c-d-e-f-g-h-i-0:done=1s=q+t+t z=s :o=l+m+n+(s-z--)goto3"#;
+        let program = YololParser::unrestricted().parse(src).unwrap();
+        let mut simple_interp = SimpleInterp::new(program.clone());
+        let mut vm = IRMachine::from_ast(
+            CodegenOptions {
+                protect_locals: true,
+                protect_globals: true,
+            },
+            program,
+        );
+        let ident = Ident::global("done");
+        while if let Some(v) = simple_interp.values().get(&ident) {
+            !v.as_bool()
+        } else {
+            true
+        } {
+            simple_interp.step_line();
+        }
+        while !vm.get_ident_value(&ident).as_bool() {
+            vm.step();
+        }
+        for (ident, value) in simple_interp.values() {
+            assert_eq!(
+                *value,
+                vm.get_ident_value(ident),
+            );
+        }
+    }
 }

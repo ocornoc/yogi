@@ -590,4 +590,24 @@ goto8"#
     fn many_lines() {
         tester(true, &("\n".repeat(30) + r#":output="ok" goto30"#));
     }
+
+    #[test]
+    fn black_friday_zijkhal() {
+        let src =
+r#":i="8591433801" a="*********"i=a+9p+=a goto++k/57
+h=a--+8g=a--+7f=a--+6e=a--+5d=a--+4c=a--+3b=a--+2a="*1"
+t=:i+:i q=p-0+t-a-b-c-d-e-f-g-h-i-0s=q+t z=s l=s-z--
+q=q+l-a-b-c-d-e-f-g-h-i-0s=q+t z=s m=s-z--q=q+m-a-b-c-d-e-f-g-h-i-0s=q+t+t
+z=s n=s-z--q=q+n-a-b-c-d-e-f-g-h-i-0:done=1s=q+t+t z=s :o=l+m+n+(s-z--)goto3"#;
+        let mut interp = SimpleInterp::new(YololParser::unrestricted().parse(src).unwrap());
+        let ident = Ident::global("done");
+        while if let Some(v) = interp.values().get(&ident) {
+            !v.as_bool()
+        } else {
+            true
+        } {
+            interp.step_line();
+        }
+        assert_eq!(interp.values()[&Ident::global("o")], Value::Str("0000".into()));
+    }
 }
