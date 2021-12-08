@@ -95,7 +95,6 @@ fn setup_and_bench(
     start_line: usize,
     _terminate_pc_of: bool,
 ) -> Result<()> {
-    let orig_max_lines = max_lines;
     let vars = read_vars()?;
     let program = read_program()?;
     let mut vm = IRMachine::from_ast(CodegenOptions {
@@ -105,6 +104,7 @@ fn setup_and_bench(
     vm.set_next_line(start_line);
     let outer_iters = max_lines / 1000;
     let mut samples = Vec::with_capacity(outer_iters.min(1_000_000));
+    let mut elapsed_lines = 0;
 
     for vd in vars {
         let ident = Ident {
@@ -131,6 +131,7 @@ fn setup_and_bench(
 
         for _ in 0..max_lines.min(1000) {
             vm.step();
+            elapsed_lines += 1;
 
             if vm.get_ident_value(&stop_flag).as_bool() {
                 break 'outer;
@@ -147,7 +148,7 @@ fn setup_and_bench(
     print_results(
         &vm,
         elapsed_s,
-        orig_max_lines - max_lines,
+        elapsed_lines,
         iter.map(|d| d.as_secs_f32()).collect(),
     );
     Ok(())
