@@ -59,15 +59,6 @@ fn print_results(vm: &IRMachine, elapsed_s: f32, elapsed_lines: usize, samples: 
     serde_json::to_writer(stdout(), &results).unwrap();
 }
 
-fn set_core_affinity() {
-    core_affinity::set_for_current(core_affinity::get_core_ids()
-        .unwrap()
-        .into_iter()
-        .last()
-        .unwrap()
-    );
-}
-
 fn read_vars() -> Result<Vec<VarData>> {
     let mut bytes = Vec::with_capacity(100);
     for c in stdin().lock().bytes() {
@@ -117,7 +108,6 @@ fn setup_and_bench(
         });
     }
 
-    set_core_affinity();
     let start = Instant::now();
 
     'outer: for _ in 0..=outer_iters {
