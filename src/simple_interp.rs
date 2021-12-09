@@ -220,9 +220,9 @@ impl SimpleInterp {
 mod tests {
     use super::*;
 
-    fn tester(should_pass: bool, src: &str) {
+    fn tester(steps: usize, should_pass: bool, src: &str) {
         let mut interp = SimpleInterp::new(YololParser::unrestricted().parse(src).unwrap());
-        interp.step_lines(10_000);
+        interp.step_lines(steps);
         if should_pass {
             assert_eq!(interp.values()[&Ident::global("output")], Value::Str("ok".into()));
         } else {
@@ -233,12 +233,12 @@ mod tests {
     #[test]
     fn multiply_huge()
     {
-        tester(true, r#"x=asin999 c=1*x if c==0then:output="ok"else:output=":("end goto1"#);
+        tester(100, true, r#"x=asin999 c=1*x if c==0then:output="ok"else:output=":("end goto1"#);
     }
 
     #[test]
     fn acid_acos() {
-        tester(true,
+        tester(100, true,
 r#"x=acos(0)
 u/=x!=90 :OUTPUT="Failed #1 : " + x goto10
 x=acos(1)
@@ -254,7 +254,7 @@ goto10"#
 
     #[test]
     fn acid_asin() {
-        tester(true,
+        tester(100, true,
 r#"x=asin(0)
 u/=x!=0 :OUTPUT="Failed #1 : " + x goto10
 x=asin(1)
@@ -270,7 +270,7 @@ goto10"#
 
     #[test]
     fn acid_atan() {
-        tester(true,
+        tester(100, true,
 r#"x=atan(0)
 u/=x!=0 :OUTPUT="Failed #1 : " + x goto10
 x=atan(1)
@@ -286,7 +286,7 @@ goto10"#
 
     #[test]
     fn acid_exponents() {
-        tester(true,
+        tester(100, true,
 r#"x=2^4
 u/=x!=16 :OUTPUT="Failed #1 : " + x goto12
 x=2^40
@@ -304,7 +304,7 @@ goto12"#
 
     #[test]
     fn acid_modulus() {
-        tester(true,
+        tester(100, true,
 r#"n=1 x=10%7 y=3 if x!=y then goto19 end n++ 
 x=10%3 y=1 if x!=y then goto19 end n++ 
 x=10%3.1 y=0.7 if x!=y then goto19 end n++ 
@@ -330,7 +330,7 @@ goto20"#
 
     #[test]
     fn acid_multiply() {
-        tester(true,
+        tester(100, true,
 r#"x=1 i=24 j=38 x*=3 x*=3 x*=3 x*=3 x*=3 
 u/=x!=243 :OUTPUT="Failed #1 : " + x goto8
 u/=i>0 i-- x*=3 goto3
@@ -344,7 +344,7 @@ goto8"#
 
     #[test]
     fn acid_precedence1() {
-        tester(true,
+        tester(100, true,
 r#"num=1 x=(0 and 0 or 1 ) y=0 if x!=y then goto19 end num++
 x=((0 and 0) or 1 ) y= 1 if x!=y then goto19 end num++ 
 x=(0 and (0 or 1) ) y= 0 if x!=y then goto19 end num++ 
@@ -370,7 +370,7 @@ goto20"#
 
     #[test]
     fn acid_precedence2() {
-        tester(true,
+        tester(100, true,
 r#"num=1 x=(sqrt 3! ) y=2.449 if x!=y then goto19 end num++ 
 x=(sqrt (3!) ) y=2.449 if x!=y then goto19 end num++ 
 x=((sqrt 9) ) y=3 if x!=y then goto19 end num++ 
@@ -396,7 +396,7 @@ goto20"#
 
     #[test]
     fn acid_precedence3() {
-        tester(true,
+        tester(100, true,
 r#"num=1 x=(2*2^2 ) y= 8 if x!=y then goto19 end num++ 
 x=(2+2^2 ) y= 6 if x!=y then goto19 end num++ 
 x=(-2^2 ) y= 4 if x!=y then goto19 end num++ 
@@ -422,7 +422,7 @@ goto20"#
 
     #[test]
     fn acid_precedence4() {
-        tester(true,
+        tester(100, true,
 r#"num=1 x=(2*(2>1)*1 ) y= 2 if x!=y then goto19 end num++ 
 x=(2^2>1^1 ) y= 1 if x!=y then goto19 end num++ 
 x=(2+1==1+2 ) y= 5 if x!=y then goto19 end num++ 
@@ -448,7 +448,7 @@ goto20"#
 
     #[test]
     fn acid_precedence5() {
-        tester(true,
+        tester(100, true,
 r#"num=1 x=(not 1+1 ) y=0 if x!=y then goto19 end num++ 
 x=(not 0+1 ) y=0 if x!=y then goto19 end num++ 
 x=(not 0+0 ) y=1 if x!=y then goto19 end num++ 
@@ -474,7 +474,7 @@ goto20"#
 
     #[test]
     fn acid_precedence6() {
-        tester(true,
+        tester(100, true,
 r#"num=1 x=not(not 0) y=0 ifx!=y thengoto19end num++ 
 x=not(not 1) y=1 ifx!=y thengoto19end num++ 
 x=(not 0) and not 0 y=1 ifx!=y thengoto19end num++ 
@@ -500,7 +500,7 @@ goto20"#
 
     #[test]
     fn acid_sqrt() {
-        tester(true,
+        tester(100, true,
 r#"n=1 x=sqrt 24 y=4.899 if x!=y then goto19 end n++ 
 x=(sqrt 2) y=1.414 if x!=y then goto19 end n++ 
 x=(sqrt 7) y=2.645 if x!=y then goto19 end n++ 
@@ -526,7 +526,7 @@ goto20"#
 
     #[test]
     fn acid_string_length() {
-        tester(true,
+        tester(10_000, true,
 r#"a="字字字字字字字字字字字字字字字字字字字字" //20
 b=a b+=b b+=b b+=b b+=b b+=b b+=b b+=b b+=b // b=7680chars
 c+=b!="" b-- c+=b!="" b-- c+=b!="" b-- c+=b!="" b-- c+=b!="" b-- goto3
@@ -537,7 +537,7 @@ if c==1024 then :OUTPUT="ok" goto4 end
 
     #[test]
     fn acid_string_length_inv() {
-        tester(false,
+        tester(10_000, false,
 r#"a="字字字字字字字字字字字字字字字字字字字字" //20
 b=a b+=b b+=b b+=b b+=b b+=b b+=b b+=b b+=b // b=7680chars
 c+=b!="" b-- c+=b!="" b-- c+=b!="" b-- c+=b!="" b-- c+=b!="" b-- goto3
@@ -548,7 +548,7 @@ if c==1023 then :OUTPUT="ok" goto4 end
 
     #[test]
     fn acid_string_logic() {
-        tester(true,
+        tester(100, true,
 r#"num=1 if "" then goto 19 end num++
 if "abc" then goto 19 end num++
 if "1" then goto 19 end num++
@@ -574,7 +574,7 @@ goto20"#
 
     #[test]
     fn acid_tan() {
-        tester(true,
+        tester(100, true,
 r#"x=tan(0)
 u/=x!=0 :OUTPUT="Failed #1 : " + x goto8
 x=tan(45)
@@ -588,7 +588,7 @@ goto8"#
 
     #[test]
     fn many_lines() {
-        tester(true, &("\n".repeat(30) + r#":output="ok" goto30"#));
+        tester(100, true, &("\n".repeat(30) + r#":output="ok" goto30"#));
     }
 
     #[test]
