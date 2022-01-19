@@ -865,7 +865,7 @@ goto20"#
 
     #[test]
     fn acid_string_length() {
-        tester(100,
+        tester(10_000,
 r#"a="字字字字字字字字字字字字字字字字字字字字" //20
 b=a b+=b b+=b b+=b b+=b b+=b b+=b b+=b b+=b // b=7680chars
 c+=b!="" b-- c+=b!="" b-- c+=b!="" b-- c+=b!="" b-- c+=b!="" b-- goto3
