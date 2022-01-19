@@ -1,7 +1,7 @@
 use std::time::*;
 use std::io::{stdin, stdout, Read};
 use yogi::{arith::Value, parser::{YololParser, Ident}, ir::{IRMachine, CodegenOptions}};
-use clap::clap_app;
+use clap::{Parser, Args, clap_app};
 use anyhow::Result;
 use serde::{Serialize, Deserialize};
 
@@ -144,41 +144,41 @@ fn setup_and_bench(
     Ok(())
 }
 
+#[derive(Parser)]
+/// Yogi harness for Referee/Yolol.IL
+#[clap(name = "yogi_ref_harness", version, author)]
+struct Cli {
+    /// The variable used to detect stopping
+    #[clap(default_value = ":done", short = 'f')]
+    stop_flag: Ident,
+    /// The maximum number of steps (lines) before timeout
+    #[clap(default_value_t = u32::MAX, short = 's')]
+    max_steps: u32,
+    /// The maximum amount of seconds before timeout
+    #[clap(short = 't')]
+    max_sec: Option<f32>,
+    /// The starting line
+    #[clap(default_value_t = 0)]
+    start_pc: u32,
+    /// Terminate on program overflow
+    #[clap(long = "term-pc-of")]
+    terminate_pc_of: bool,
+}
+
 fn main() {
-    let matches = clap_app!(yogi_ref_harness =>
-        (version: "0.2")
-        (author: "Grayson Burton <ocornoc@protonmail.com>")
-        (@arg STOP_FLAG: -f --("stop-flag") +takes_value "The variable used to detect stopping")
-        (@arg MAX_STEPS: -s --("max-steps") +takes_value "The maximum number of steps (lines) before timeout")
-        (@arg MAX_SEC: -t --("max-sec") +takes_value "The maximum amount of seconds before timeout")
-        (@arg START_PC: --("start-pc") +takes_value "The starting line")
-        (@arg TERMINATE_PC_OF: --("term-pc-of") "Terminate on program counter overflow")
-    ).get_matches();
-    let stop_flag: Ident = matches.value_of("STOP_FLAG").unwrap_or(":done").parse().unwrap();
-    let max_lines = matches
-        .value_of("MAX_STEPS")
-        .map(str::parse)
-        .transpose()
-        .unwrap()
-        .unwrap_or(u32::MAX);
-    let max_dur = matches
-        .value_of("MAX_SEC")
-        .map(str::parse)
-        .transpose()
-        .unwrap()
-        .map(Duration::from_secs_f32);
-    let start_line: u32 = matches
-        .value_of("START_PC")
-        .map(str::parse)
-        .transpose()
-        .unwrap()
-        .unwrap_or(0);
-    let terminate_pc_of = matches.is_present("TERMINATE_PC_OF");
+    let Cli {
+        stop_flag,
+        max_steps,
+        max_sec,
+        start_pc,
+        terminate_pc_of,
+    } = Cli::parse();
+    let max_sec = max_sec.map(Duration::from_secs_f32);
     let e = setup_and_bench(
         stop_flag,
-        max_lines as usize,
-        max_dur,
-        start_line as usize,
+        max_steps as usize,
+        max_sec,
+        start_pc as usize,
         terminate_pc_of,
     );
     if let Err(e) = e {

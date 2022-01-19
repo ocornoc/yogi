@@ -1,6 +1,6 @@
 [package]
 name = "yogi"
-version = "0.1.0"
+version = "0.3.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 
@@ -33,6 +33,7 @@ derive_more = "0.99.16"
 anyhow = "1.0.45"
 arrayvec = "0.7.2"
 atomic_refcell = "0.1.8"
-clap = "~2.34.0"
+clap = {version = "3.0.8", features = ["derive"]}
 serde = {version = "1.0.130", features = ["derive"]}
 serde_json = "1.0.72"
+html-escape = "0.2.9"
