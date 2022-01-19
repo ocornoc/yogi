@@ -149,16 +149,16 @@ fn setup_and_bench(
 #[clap(name = "yogi_ref_harness", version, author)]
 struct Cli {
     /// The variable used to detect stopping
-    #[clap(default_value = ":done", short = 'f')]
+    #[clap(default_value = ":done", short = 'f', long)]
     stop_flag: Ident,
     /// The maximum number of steps (lines) before timeout
-    #[clap(default_value_t = u32::MAX, short = 's')]
+    #[clap(default_value_t = u32::MAX, short = 's', long)]
     max_steps: u32,
     /// The maximum amount of seconds before timeout
-    #[clap(short = 't')]
+    #[clap(short = 't', long)]
     max_sec: Option<f32>,
     /// The starting line
-    #[clap(default_value_t = 0)]
+    #[clap(default_value_t = 0, long)]
     start_pc: u32,
     /// Terminate on program overflow
     #[clap(long = "term-pc-of")]
