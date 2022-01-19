@@ -194,6 +194,24 @@ impl Number {
             Number(result.wrapping_mul(Number::SCALE))
         }
     }
+
+    /// Get the number after this, or `None` if there isn't one.
+    pub fn next(self) -> Option<Self> {
+        if self == Self::MAX {
+            None
+        } else {
+            Some(Number(self.0 + 1))
+        }
+    }
+
+    /// Get the number before this, or `None` if there isn't one.
+    pub fn prev(self) -> Option<Self> {
+        if self == Self::MIN {
+            None
+        } else {
+            Some(Number(self.0 - 1))
+        }
+    }
 }
 
 impl From<bool> for Number {
