@@ -610,4 +610,30 @@ z=s n=s-z--q=q+n-a-b-c-d-e-f-g-h-i-0:done=1s=q+t+t z=s :o=l+m+n+(s-z--)goto3"#;
         }
         assert_eq!(interp.values()[&Ident::global("o")], Value::Str("0000".into()));
     }
+
+    #[test]
+    fn rtl_test() {
+        tester(100, true,
+r#"s="hello" s=s-s-- n++ if s!="" then goto 20 end
+s=5 s=s-s-- n++ if s!=0 then goto 20 end
+s=5 s=s+s++ n++ if s!=12 then goto 20 end
+s=5 s=(s--+(2*s++))+s++ n++ if s!=26 then goto 20 end
+s=5 s=((2*s++)+s--)+s++ n++ if s!=23 then goto 20 end
+
+
+
+
+
+
+
+
+
+
+
+
+
+:output="ok" goto 19
+:output="Failed test "+n goto 20"#
+        );
+    }
 }

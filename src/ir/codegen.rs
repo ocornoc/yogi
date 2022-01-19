@@ -117,8 +117,8 @@ impl CodegenData {
 
     fn codegen_from_binop(&mut self, section: Section, l: Expr, op: Binop, r: Expr) -> ValReg {
         let mut r = self.codegen_from_expr(section, r);
-        let mut l = self.codegen_from_expr(section, l);
         r = self.copy_valreg(section, r);
+        let mut l = self.codegen_from_expr(section, l);
         l = self.copy_valreg(section, l);
         match op {
             Binop::And => {

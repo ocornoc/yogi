@@ -720,4 +720,38 @@ mod tests {
         )]);
         Ok(())
     }
+
+    #[test]
+    fn rtl_bug() -> Result<()> {
+        let program = YololParser::default().parse("\
+        s=5 s=((2*s++)+s--)+s++ n++ if s!=23 then goto 20 end
+        ")?;
+        let s = Ident::local("s");
+        let sinc = Incdec {
+            inc: true,
+            ident: s.clone(),
+        };
+        let sdec = Incdec {
+            inc: false,
+            ident: s.clone(),
+        };
+        assert_eq!(program[0].stmts, vec![
+            Statement::Assign(s.clone(), None, 5.into()),
+            Statement::Assign(
+                s.clone(),
+                None,
+                ((Expr::from(2) * sinc.clone().into()) + sdec.clone().into()) + sinc.clone().into(),
+            ),
+            Statement::Incdec(Incdec {
+                inc: true,
+                ident: Ident::local("n"),
+            }),
+            Statement::Ite(
+                Expr::Binop(Box::new(s.into()), Binop::Ne, Box::new(23.into())),
+                vec![Statement::Goto(20.into())],
+                vec![],
+            ),
+        ]);
+        Ok(())
+    }
 }

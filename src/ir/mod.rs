@@ -561,7 +561,12 @@ mod tests {
         );
         simple_interp.step_lines(steps);
         ir_machine.step_repeat(steps);
-        for (ident, value) in simple_interp.values() {
+        let values = simple_interp.values();
+        assert_eq!(
+            values[&Ident::global("output")],
+            ir_machine.get_ident_value(&Ident::global("output")),
+        );
+        for (ident, value) in values {
             assert_eq!(
                 *value,
                 ir_machine.get_ident_value(ident),
@@ -964,5 +969,31 @@ z=s n=s-z--q=q+n-a-b-c-d-e-f-g-h-i-0:done=1s=q+t+t z=s :o=l+m+n+(s-z--)goto3"#;
                 vm.get_ident_value(ident),
             );
         }
+    }
+
+    #[test]
+    fn rtl_test() {
+        tester(100,
+r#"s="hello" s=s-s-- n++ if s!="" then goto 20 end
+s=5 s=s-s-- n++ if s!=0 then goto 20 end
+s=5 s=s+s++ n++ if s!=12 then goto 20 end
+s=5 s=(s--+(2*s++))+s++ n++ if s!=26 then goto 20 end
+s=5 s=((2*s++)+s--)+s++ n++ if s!=23 then goto 20 end
+
+
+
+
+
+
+
+
+
+
+
+
+
+:output="ok" goto 19
+:output="Failed test "+n goto 20"#
+        );
     }
 }
