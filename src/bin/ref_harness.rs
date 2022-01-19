@@ -1,7 +1,7 @@
 use std::time::*;
 use std::io::{stdin, stdout, Read};
 use yogi::{arith::Value, parser::{YololParser, Ident}, ir::{IRMachine, CodegenOptions}};
-use clap::{Parser, Args, clap_app};
+use clap::Parser;
 use anyhow::Result;
 use serde::{Serialize, Deserialize};
 
