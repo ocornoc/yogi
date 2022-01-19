@@ -887,7 +887,7 @@ if c==1023 then :OUTPUT="ok" goto4 end
 
     #[test]
     fn acid_string_logic() {
-        tester(10_000,
+        tester(100,
 r#"num=1 if "" then goto 19 end num++
 if "abc" then goto 19 end num++
 if "1" then goto 19 end num++
