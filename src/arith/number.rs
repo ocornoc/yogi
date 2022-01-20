@@ -948,10 +948,10 @@ mod tests {
         let mut intervals = orig_intervals.clone();
         intervals += &NumberIntervals::everything();
         assert_eq!(intervals.intervals, NumberIntervals::everything().intervals);
-        let mut intervals = orig_intervals.clone();
+        intervals = orig_intervals.clone();
         intervals += &NumberIntervals::nothing();
         assert_eq!(intervals.intervals, NumberIntervals::nothing().intervals);
-        let mut intervals = orig_intervals.clone();
+        intervals = orig_intervals.clone();
         intervals += Number::new(1.0);
         assert_eq!(intervals.intervals, [
             Interval::from(Number::new(-6.0)..=Number::new(2.0)),
@@ -960,7 +960,7 @@ mod tests {
         ]);
         intervals += Number::new(-1.0);
         assert_eq!(intervals.intervals, orig_intervals.intervals);
-        let mut intervals = orig_intervals.clone();
+        intervals = orig_intervals.clone();
         intervals += &NumberIntervals{
             intervals: vec![Interval::from(Number::new(-2.0)..=Number::new(1.0))],
             runtime_error: false,
@@ -969,7 +969,7 @@ mod tests {
             Interval::from(Number::new(-9.0)..=Number::new(2.0)),
             Interval::from(Number::new(3.0)..Number::new(100.0)),
         ]);
-        let mut intervals = orig_intervals.clone();
+        intervals = orig_intervals.clone();
         intervals += Number::MAX;
         assert_eq!(intervals.intervals, [
             Interval::from(Number::MIN..=(Number::MAX + Number::new(1.0))),
@@ -977,7 +977,7 @@ mod tests {
             Interval::from((Number::new(7.0) + Number::MAX)..(Number::new(99.0) + Number::MAX)),
             Interval::from((Number::MAX + Number::new(-7.0))..=Number::MAX),
         ]);
-        let mut intervals = orig_intervals.clone();
+        intervals = orig_intervals.clone();
         intervals += Number::MIN;
         assert_eq!(intervals.intervals, [
             Interval::from(Number::MIN..=(Number::MAX + Number::new(1.0)).next().unwrap()),
