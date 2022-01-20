@@ -37,3 +37,4 @@ clap = {version = "3.0.8", features = ["derive"]}
 serde = {version = "1.0.130", features = ["derive"]}
 serde_json = "1.0.72"
 html-escape = "0.2.9"
+itertools = "0.10.3"
