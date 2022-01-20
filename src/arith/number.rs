@@ -917,6 +917,28 @@ mod tests {
     }
 
     #[test]
+    fn intervals_negation() {
+        let mut intervals = NumberIntervals {
+            intervals: vec![Number::MAX.into()],
+            runtime_error: false,
+        };
+        intervals.rebuild();
+        intervals = -intervals;
+        assert_eq!(intervals.intervals, [Number::MIN.next().unwrap().into()]);
+        intervals = -intervals;
+        assert_eq!(intervals.intervals, [Number::MAX.into()]);
+        intervals.intervals = vec![Number::MIN.into()];
+        intervals = -intervals;
+        assert_eq!(intervals.intervals, [Number::MIN.into()]);
+        intervals = NumberIntervals::everything();
+        intervals = -intervals;
+        assert_eq!(intervals.intervals, NumberIntervals::everything().intervals);
+        intervals = NumberIntervals::nothing();
+        intervals = -intervals;
+        assert_eq!(intervals.intervals, NumberIntervals::nothing().intervals);
+    }
+
+    #[test]
     fn intervals_addition() {
         let orig_intervals = NumberIntervals {
             intervals: vec![
