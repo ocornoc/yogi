@@ -562,13 +562,12 @@ impl Add<Interval> for Interval {
             return (Interval::from(..), None);
         }
         // otherwise, we now know the addition would not have filled the range, and thus we can
-        // compare the signs of start and end (and maybe swap) to check for either start or end
-        // overflowing.
+        // split the interval in the case of overflows
         let (start, start_of) = self.start.0.overflowing_add(rhs.start.0);
         let (end, end_of) = self.end.0.overflowing_add(rhs.end.0);
         self.start.0 = start;
         self.end.0 = end;
-        // we've checked against a full range, so now we can split the overflow
+        // we've checked against a full range, so now we can split any overflows
         self.split_overflow(start_of, end_of)
     }
 }
@@ -587,13 +586,12 @@ impl Sub<Interval> for Interval {
             return (Interval::from(..), None);
         }
         // otherwise, we now know the subtraction would not have filled the range, and thus we can
-        // compare the signs of start and end (and maybe swap) to check for either start or end
-        // overflowing.
+        // split the interval in the case of overflows
         let (start, start_of) = self.start.0.overflowing_sub(rhs.start.0);
         let (end, end_of) = self.end.0.overflowing_sub(rhs.end.0);
         self.start.0 = start;
         self.end.0 = end;
-        // we've checked against a full range, so now we can split the overflow
+        // we've checked against a full range, so now we can split any overflows
         self.split_overflow(start_of, end_of)
     }
 }
@@ -612,13 +610,12 @@ impl Mul<Interval> for Interval {
             return (Interval::from(..), None);
         }
         // otherwise, we now know the multiplication would not have filled the range, and thus we
-        // can compare the signs of start and end (and maybe swap) to check for either start or end
-        // overflowing.
+        // split the interval in the case of overflows
         let (start, start_of) = self.start.0.overflowing_mul(rhs.start.0);
         let (end, end_of) = self.end.0.overflowing_mul(rhs.end.0);
         self.start.0 = start / Number::SCALE;
         self.end.0 = end / Number::SCALE;
-        // we've checked against a full range, so now we can split the overflow
+        // we've checked against a full range, so now we can split any overflows
         self.split_overflow(start_of, end_of)
     }
 }
