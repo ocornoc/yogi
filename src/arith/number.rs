@@ -12,28 +12,22 @@ impl Number {
     pub const MIN: Number = Number(i64::MIN);
     pub const ONE: Number = Number(1 * Self::SCALE);
     pub const ZERO: Number = Number(0);
-    const MAX_VAL_F64: f64 = Self::MAX.0 as f64 / Self::SCALE_F64;
-    const MIN_VAL_F64: f64 = Self::MIN.0 as f64 / Self::SCALE_F64;
+    const MAX_VAL_F64: f64 = Self::MAX.0 as f64;
+    const MIN_VAL_F64: f64 = Self::MIN.0 as f64;
     const MAX_VAL_F32: f32 = Self::MAX_VAL_F64 as f32;
     const MIN_VAL_F32: f32 = Self::MIN_VAL_F64 as f32;
 
-    pub fn new(mut n: f64) -> Self {
-        if n.is_finite() && {
-            n *= Self::SCALE_F64;
-            n <= Self::MAX_VAL_F64 && n >= Self::MIN_VAL_F64
-        } {
-            Number(n as i64)
+    pub fn new(n: f64) -> Self {
+        if n.is_finite() && n <= Self::MAX_VAL_F64 && n >= Self::MIN_VAL_F64 {
+            Number((n * Number::SCALE_F64) as i64)
         } else {
             Number::MIN
         }
     }
 
-    pub fn new_f32(mut n: f32) -> Self {
-        if n.is_finite() && {
-            n *= Self::SCALE_F32;
-            n <= Self::MAX_VAL_F32 && n >= Self::MIN_VAL_F32
-        } {
-            Number(n as i64)
+    pub fn new_f32(n: f32) -> Self {
+        if n.is_finite() && n <= Self::MAX_VAL_F32 && n >= Self::MIN_VAL_F32 {
+            Number((n * Number::SCALE_F32) as i64)
         } else {
             Number::MIN
         }
