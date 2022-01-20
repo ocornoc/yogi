@@ -421,7 +421,7 @@ struct Interval {
 }
 
 impl Interval {
-    fn from<R: RangeBounds<Number> + ?Sized>(r: &R) -> Self {
+    fn from<R: RangeBounds<Number>>(r: R) -> Self {
         let start = match r.start_bound() {
             Bound::Included(&start) => start,
             Bound::Excluded(start) => start.next().unwrap_or(Number::MAX),
@@ -471,28 +471,14 @@ impl Interval {
     fn split_overflow(mut self, start_of: bool, end_of: bool) -> (Self, Option<Self>) {
         let (start, end) = (self.start.0, self.end.0);
         let other = match (start_of, end_of) {
-            (false, false) => {
+            (false, false) | (true, true) => {
                 // if neither bound overflows, then we can just use it as-is.
                 // if both bounds overflow, then we just need to swap.
                 self.swap_if_necessary();
                 None
             },
-            (true, true) => if start <= end {
-                // if both overflow but the order is preserved, then the interval wraps and needs to
-                // be split.
-                self.start = Number::MIN;
-                Some(Interval {
-                    start: Number(start),
-                    end: Number::MAX,
-                })
-            } else {
-                // if both overflow but the order is changed, then we just need to swap
-                self.swap_if_necessary();
-                None
-            },
             (true, false) => {
-                // if start overflowed and end didn't, then rhs is negative and start wrapped around
-                // MIN
+                // if start overflowed and end didn't, then start wrapped around MIN
                 self.start = Number::MIN;
                 Some(Interval {
                     start: Number(start),
@@ -500,8 +486,7 @@ impl Interval {
                 })
             },
             (false, true) => {
-                // if end overflowed and start didn't, then rhs is positive and end wrapped around
-                // MAX
+                // if end overflowed and start didn't, then end wrapped around MAX
                 self.end = Number::MAX;
                 Some(Interval {
                     start: Number::MIN,
@@ -574,13 +559,13 @@ impl Add<Interval> for Interval {
         // completely fill the range of i64 thanks to modular arithmetic and the pigeonhole
         // principle.
         if abs_diff_i128(start, end) >= u64::MAX as u128 {
-            return (Interval::from(&(..)), None);
+            return (Interval::from(..), None);
         }
         // otherwise, we now know the addition would not have filled the range, and thus we can
         // compare the signs of start and end (and maybe swap) to check for either start or end
         // overflowing.
         let (start, start_of) = self.start.0.overflowing_add(rhs.start.0);
-        let (end, end_of) = self.start.0.overflowing_add(rhs.end.0);
+        let (end, end_of) = self.end.0.overflowing_add(rhs.end.0);
         self.start.0 = start;
         self.end.0 = end;
         // we've checked against a full range, so now we can split the overflow
@@ -599,13 +584,13 @@ impl Sub<Interval> for Interval {
         // completely fill the range of i64 thanks to modular arithmetic and the pigeonhole
         // principle.
         if abs_diff_i128(start, end) >= u64::MAX as u128 {
-            return (Interval::from(&(..)), None);
+            return (Interval::from(..), None);
         }
         // otherwise, we now know the subtraction would not have filled the range, and thus we can
         // compare the signs of start and end (and maybe swap) to check for either start or end
         // overflowing.
         let (start, start_of) = self.start.0.overflowing_sub(rhs.start.0);
-        let (end, end_of) = self.start.0.overflowing_sub(rhs.end.0);
+        let (end, end_of) = self.end.0.overflowing_sub(rhs.end.0);
         self.start.0 = start;
         self.end.0 = end;
         // we've checked against a full range, so now we can split the overflow
@@ -624,13 +609,13 @@ impl Mul<Interval> for Interval {
         // completely fill the range of i64 thanks to modular arithmetic and the pigeonhole
         // principle.
         if abs_diff_i128(start, end) >= u64::MAX as u128 {
-            return (Interval::from(&(..)), None);
+            return (Interval::from(..), None);
         }
         // otherwise, we now know the multiplication would not have filled the range, and thus we
         // can compare the signs of start and end (and maybe swap) to check for either start or end
         // overflowing.
         let (start, start_of) = self.start.0.overflowing_mul(rhs.start.0);
-        let (end, end_of) = self.start.0.overflowing_mul(rhs.end.0);
+        let (end, end_of) = self.end.0.overflowing_mul(rhs.end.0);
         self.start.0 = start / Number::SCALE;
         self.end.0 = end / Number::SCALE;
         // we've checked against a full range, so now we can split the overflow
@@ -659,7 +644,6 @@ impl NumberIntervals {
         let mut combined = true;
         while combined {
             let mut start = self.intervals.len();
-            combined = false;
             while let [.., ref mut lt, ref rt] = self.intervals[..start] {
                 if lt.should_combine_intervals(rt) {
                     *lt = Interval {
@@ -667,7 +651,6 @@ impl NumberIntervals {
                         end: lt.end.max(rt.end),
                     };
                     remove.push(start - 1);
-                    combined = true;
                 }
                 start -= 1;
             }
@@ -675,6 +658,8 @@ impl NumberIntervals {
             for &i in remove.iter() {
                 self.intervals.remove(i);
             }
+            combined = !remove.is_empty();
+            remove.clear();
         }
     }
 
@@ -687,7 +672,7 @@ impl NumberIntervals {
     /// An interval containing every number.
     pub fn everything() -> Self {
         let mut intervals = Vec::with_capacity(Self::DEFAULT_ALLOC);
-        intervals.push(Interval::from(&(..)));
+        intervals.push(Interval::from(..));
         NumberIntervals {
             intervals,
             runtime_error: false,
@@ -844,10 +829,145 @@ impl Sub<Number> for NumberIntervals {
     }
 }
 
+impl MulAssign<&NumberIntervals> for NumberIntervals {
+    fn mul_assign(&mut self, rhs: &NumberIntervals) {
+        let mut old_intervals = Vec::with_capacity(2 * self.intervals.len() * rhs.intervals.len());
+        std::mem::swap(&mut old_intervals, &mut self.intervals);
+
+        for (l, &r) in old_intervals.into_iter().cartesian_product(rhs.intervals.iter()) {
+            let (i0, i1) = l * r;
+            self.intervals.push(i0);
+            self.intervals.extend(i1);
+        }
+
+        self.rebuild();
+    }
+}
+
+impl Mul<&NumberIntervals> for NumberIntervals {
+    type Output = Self;
+
+    fn mul(mut self, rhs: &NumberIntervals) -> Self::Output {
+        self *= rhs;
+        self
+    }
+}
+
+impl MulAssign<Number> for NumberIntervals {
+    fn mul_assign(&mut self, rhs: Number) {
+        let intervals: NumberIntervals = rhs.into();
+        *self *= &intervals;
+    }
+}
+
+impl Mul<Number> for NumberIntervals {
+    type Output = Self;
+
+    fn mul(mut self, rhs: Number) -> Self::Output {
+        self *= rhs;
+        self
+    }
+}
+
 const fn abs_diff_i128(n: i128, m: i128) -> u128 {
     if n < m {
         (m as u128).wrapping_sub(n as u128)
     } else {
         (n as u128).wrapping_sub(m as u128)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn intervals_rebuild() {
+        let mut expected_intervals = NumberIntervals {
+            intervals: vec![
+                Interval::from(Number::new(-7.0)..Number::new(1.0)),
+                Number::new(5.0).into(),
+                Interval::from(Number::new(7.0)..Number::new(99.0)),
+            ],
+            runtime_error: false,
+        };
+        let mut intervals = expected_intervals.clone();
+        intervals.rebuild();
+        assert_eq!(intervals.intervals, expected_intervals.intervals);
+        intervals.intervals.push(Number::new(5.2).into());
+        expected_intervals.intervals.insert(2, Number::new(5.2).into());
+        intervals.rebuild();
+        assert_eq!(intervals.intervals, expected_intervals.intervals);
+        intervals.intervals.push(Number::new(5.2).into());
+        intervals.rebuild();
+        assert_eq!(intervals.intervals, expected_intervals.intervals);
+        intervals.intervals.push(Interval::from(Number::new(2.0)..Number::new(6.0)));
+        expected_intervals.intervals[1] = Interval::from(Number::new(2.0)..Number::new(6.0));
+        expected_intervals.intervals.remove(2);
+        intervals.rebuild();
+        assert_eq!(intervals.intervals, expected_intervals.intervals);
+        intervals.intervals.push(Number::new(6.0).into());
+        expected_intervals.intervals[1] = Interval::from(Number::new(2.0)..=Number::new(6.0));
+        intervals.rebuild();
+        assert_eq!(intervals.intervals, expected_intervals.intervals);
+        intervals.intervals.push(Interval::from(..=Number::new(-7.0)));
+        expected_intervals.intervals[0] = Interval::from(..Number::new(1.0));
+        intervals.rebuild();
+        assert_eq!(intervals.intervals, expected_intervals.intervals);
+    }
+
+    #[test]
+    fn intervals_addition() {
+        let orig_intervals = NumberIntervals {
+            intervals: vec![
+                Interval::from(Number::new(-7.0)..=Number::new(1.0)),
+                Number::new(5.0).into(),
+                Interval::from(Number::new(7.0)..Number::new(99.0)),
+            ],
+            runtime_error: false,
+        };
+        let mut intervals = orig_intervals.clone();
+        intervals += &NumberIntervals::everything();
+        assert_eq!(intervals.intervals, NumberIntervals::everything().intervals);
+        let mut intervals = orig_intervals.clone();
+        intervals += &NumberIntervals::nothing();
+        assert_eq!(intervals.intervals, NumberIntervals::nothing().intervals);
+        let mut intervals = orig_intervals.clone();
+        intervals += Number::new(1.0);
+        assert_eq!(intervals.intervals, [
+            Interval::from(Number::new(-6.0)..=Number::new(2.0)),
+            Number::new(6.0).into(),
+            Interval::from(Number::new(8.0)..Number::new(100.0)),
+        ]);
+        intervals += Number::new(-1.0);
+        assert_eq!(intervals.intervals, orig_intervals.intervals);
+        let mut intervals = orig_intervals.clone();
+        intervals += &NumberIntervals{
+            intervals: vec![Interval::from(Number::new(-2.0)..=Number::new(1.0))],
+            runtime_error: false,
+        };
+        assert_eq!(intervals.intervals, [
+            Interval::from(Number::new(-9.0)..=Number::new(2.0)),
+            Interval::from(Number::new(3.0)..Number::new(100.0)),
+        ]);
+        let mut intervals = orig_intervals.clone();
+        intervals += Number::MAX;
+        assert_eq!(intervals.intervals, [
+            Interval::from(Number::MIN..=(Number::MAX + Number::new(1.0))),
+            (Number::new(5.0) + Number::MAX).into(),
+            Interval::from((Number::new(7.0) + Number::MAX)..(Number::new(99.0) + Number::MAX)),
+            Interval::from((Number::MAX + Number::new(-7.0))..=Number::MAX),
+        ]);
+        let mut intervals = orig_intervals.clone();
+        intervals += Number::MIN;
+        assert_eq!(intervals.intervals, [
+            Interval::from(Number::MIN..=(Number::MAX + Number::new(1.0)).next().unwrap()),
+            (Number::new(5.0) + Number::MAX).next().unwrap().into(),
+            Interval::from((
+                Number::new(7.0) + Number::MAX).next().unwrap()
+                ..(Number::new(99.0) + Number::MAX).next().unwrap(),
+            ),
+            Interval::from((Number::MAX + Number::new(-7.0)).next().unwrap()..=Number::MAX),
+        ]);
     }
 }
