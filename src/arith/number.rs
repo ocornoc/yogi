@@ -1,7 +1,7 @@
 use itertools::Itertools;
 use super::*;
 
-#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Default)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Default, Arbitrary)]
 pub struct Number(pub i64);
 
 impl Number {
@@ -492,6 +492,21 @@ impl Interval {
     }
 }
 
+impl<'a> Arbitrary<'a> for Interval {
+    fn arbitrary(u: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
+        let mut interval = Interval {
+            start: u.arbitrary()?,
+            end: u.arbitrary()?,
+        };
+        interval.swap_if_necessary();
+        Ok(interval)
+    }
+
+    fn size_hint(depth: usize) -> (usize, Option<usize>) {
+        arbitrary::size_hint::and(i64::size_hint(depth), i64::size_hint(depth))
+    }
+}
+
 impl RangeBounds<Number> for Interval {
     fn start_bound(&self) -> Bound<&Number> {
         Bound::Included(&self.start)
@@ -744,6 +759,17 @@ impl Display for NumberIntervals {
         } else {
             write!(f, "∅")
         }
+    }
+}
+
+impl<'a> Arbitrary<'a> for NumberIntervals {
+    fn arbitrary(u: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
+        let mut intervals = NumberIntervals {
+            intervals: u.arbitrary_iter()?.try_collect()?,
+            runtime_error: false,
+        };
+        intervals.rebuild();
+        Ok(intervals)
     }
 }
 
