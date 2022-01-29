@@ -409,7 +409,7 @@ impl Rem for Number {
 }
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
-struct Interval {
+pub struct Interval {
     start: Number,
     end: Number,
 }
@@ -503,6 +503,16 @@ impl RangeBounds<Number> for Interval {
 
     fn contains<U: ?Sized + PartialOrd<Number>>(&self, item: &U) -> bool {
         *item >= self.start && *item <= self.end
+    }
+}
+
+impl IntoIterator for Interval {
+    type Item = Number;
+    type IntoIter = std::iter::Map<RangeInclusive<i64>, fn(i64) -> Number>;
+
+    #[inline(always)]
+    fn into_iter(self) -> Self::IntoIter {
+        (self.start.0..=self.end.0).map(Number)
     }
 }
 
@@ -709,6 +719,15 @@ impl From<Number> for NumberIntervals {
         let mut intervals = NumberIntervals::nothing();
         intervals.intervals.push(n.into());
         intervals
+    }
+}
+
+impl IntoIterator for NumberIntervals {
+    type Item = Number;
+    type IntoIter = std::iter::Flatten<std::vec::IntoIter<Interval>>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.intervals.into_iter().flatten()
     }
 }
 
