@@ -604,9 +604,14 @@ impl Mul<Interval> for Interval {
     type Output = (Self, Option<Self>);
 
     fn mul(mut self, rhs: Interval) -> Self::Output {
-        let (mut start, mut end) = self.to_i128();
-        start = start * rhs.start.0 as i128;
-        end = end * rhs.end.0 as i128;
+        let (start0, end0) = self.to_i128();
+        let (start1, end1) = rhs.to_i128();
+        let startstart = start0 * start1;
+        let startend = start0 * end1;
+        let endstart = end0 * start1;
+        let endend = end0 * end1;
+        let start = startstart.min(startend).min(endstart).min(endend);
+        let end = startstart.max(startend).max(endstart).max(endend);
         // if the multiplication would've had a range at least u64::MAX, then we know that it would
         // completely fill the range of i64 thanks to modular arithmetic and the pigeonhole
         // principle.
@@ -615,10 +620,38 @@ impl Mul<Interval> for Interval {
         }
         // otherwise, we now know the multiplication would not have filled the range, and thus we
         // split the interval in the case of overflows
-        let (start, start_of) = self.start.0.overflowing_mul(rhs.start.0);
-        let (end, end_of) = self.end.0.overflowing_mul(rhs.end.0);
-        self.start.0 = start / Number::SCALE;
-        self.end.0 = end / Number::SCALE;
+        let (start0, end0) = (self.start.0, self.end.0);
+        let (start1, end1) = (rhs.start.0, rhs.end.0);
+        let (startstart, startstart_of) = start0.overflowing_mul(start1);
+        let (startend, startend_of) = start0.overflowing_mul(end1);
+        let (endstart, endstart_of) = end0.overflowing_mul(start1);
+        let (endend, endend_of) = end0.overflowing_mul(end1);
+        let start = startstart.min(startend).min(endstart).min(endend);
+        let end = startstart.max(startend).max(endstart).max(endend);
+        let start_of = if start == startstart {
+            startstart_of
+        } else if start == startend {
+            startend_of
+        } else if start == endstart {
+            endstart_of
+        } else if start == endend {
+            endend_of
+        } else {
+            unreachable!()
+        };
+        let end_of = if end == startstart {
+            startstart_of
+        } else if end == startend {
+            startend_of
+        } else if end == endstart {
+            endstart_of
+        } else if end == endend {
+            endend_of
+        } else {
+            unreachable!()
+        };
+        self.start.0 = start / 1000;
+        self.end.0 = end / 1000;
         // we've checked against a full range, so now we can split any overflows
         self.split_overflow(start_of, end_of)
     }
@@ -1001,5 +1034,50 @@ mod tests {
             ),
             Interval::from((Number::MAX + Number::new(-7.0)).next().unwrap()..=Number::MAX),
         ]);
+    }
+
+    #[test]
+    fn intervals_multiplication() {
+        let mut intervals = NumberIntervals {
+            intervals: vec![
+                Interval::from(Number::new(-2.0)..=Number::new(-1.0)),
+            ],
+            runtime_error: false,
+        };
+        let mut intervals2 = NumberIntervals {
+            intervals: vec![
+                Interval::from(Number::new(1.0)..=Number::new(2.0)),
+            ],
+            runtime_error: false,
+        };
+        intervals *= &intervals2;
+        assert_eq!(intervals.intervals, [Interval::from(Number::new(-4.0)..=Number::new(-1.0))]);
+        intervals = Number::MAX.into();
+        intervals *= &intervals2;
+        assert_eq!(intervals.intervals, NumberIntervals::everything().intervals);
+        intervals = Number::new(10.0).into();
+        intervals *= &NumberIntervals::everything();
+        assert_eq!(intervals.intervals, NumberIntervals::everything().intervals);
+        intervals = Number::new(10.0).into();
+        intervals *= &NumberIntervals::nothing();
+        assert_eq!(intervals.intervals, NumberIntervals::nothing().intervals);
+        intervals.intervals = vec![
+            Interval::from(Number::new(2.0)..=Number::new(3.0)),
+            Interval::from(Number::new(26.0)..=Number::new(28.0)),
+        ];
+        intervals2.intervals = vec![
+            Interval::from(Number::new(1.5)..=Number::new(10.0)),
+            Interval::from(Number::new(100.0)..=Number::new(101.0)),
+        ];
+        intervals *= &intervals2;
+        assert_eq!(intervals.intervals, [
+            Interval::from(Number::new(3.0)..=Number::new(30.0)),
+            Interval::from(Number::new(39.0)..=Number::new(303.0)),
+            Interval::from(Number::new(2600.0)..=Number::new(2828.0)),
+        ]);
+        intervals = Number::MAX.into();
+        intervals2 = Number::new(1.0).into();
+        intervals *= &intervals2;
+        println!("{}", intervals);
     }
 }
