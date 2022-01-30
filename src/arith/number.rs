@@ -599,7 +599,8 @@ impl Display for Interval {
         if self.start == self.end {
             write!(f, "{{{}}}", self.start)
         } else {
-        write!(f, "[{}, {}]", self.start, self.end)
+            write!(f, "[{}, {}]", self.start, self.end)
+        }
     }
 }
 
