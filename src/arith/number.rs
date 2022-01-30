@@ -639,6 +639,7 @@ impl Add<Interval> for Interval {
 
     fn add(mut self, rhs: Interval) -> Self::Output {
         let (mut start, mut end) = self.to_i128();
+        // [a, b] + [c, d] = [a + c, b + d]
         start = start + rhs.start.0 as i128;
         end = end + rhs.end.0 as i128;
         // if the addition would've had a range at least u64::MAX, then we know that it would
@@ -663,6 +664,9 @@ impl Sub<Interval> for Interval {
 
     fn sub(mut self, rhs: Interval) -> Self::Output {
         let (mut start, mut end) = self.to_i128();
+        // [a, b] - [c, d] = [a, b] + -[c, d] = [a, b] + [-d, -c] = [a - d, b - c]
+        // we don't just do [a, b] + -[c, d] explicitly because of the edge case of c = Number::MIN,
+        // because -Number::MIN = Number::MIN due to wrapping.
         start = start - rhs.end.0 as i128;
         end = end - rhs.start.0 as i128;
         // if the subtraction would've had a range at least u64::MAX, then we know that it would
