@@ -13,6 +13,10 @@ fn fuzz_mul(mut left: NumberIntervals, right: &NumberIntervals) {
         left *= right;
         assert_eq!(left, NumberIntervals::nothing());
         return;
+    } else if left == Number::ZERO.into() || *right == Number::ZERO.into() {
+        left *= right;
+        assert_eq!(left, Number::ZERO.into());
+        return;
     } else if left.is_everything() || right.is_everything() {
         left *= right;
         assert_eq!(left, NumberIntervals::everything());

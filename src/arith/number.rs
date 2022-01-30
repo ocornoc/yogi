@@ -686,12 +686,97 @@ impl Sub<Interval> for Interval {
     }
 }
 
+#[derive(PartialEq, Eq, Clone, Copy)]
+struct WrapDir(Option<bool>);
+
+impl PartialOrd for WrapDir {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for WrapDir {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        use std::cmp::Ordering::*;
+
+        match (self.0, other.0) {
+            (l, r) if l == r => Equal,
+            (Some(false), _) | (_, Some(true)) => Less,
+            (Some(true), _) | (_, Some(false)) => Greater,
+            _ => unreachable!(),
+        }
+    }
+}
+
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+struct MulInfo {
+    wrap_dir: WrapDir,
+    mul: Number,
+    left: i64,
+    right: i64,
+}
+
+impl MulInfo {
+    const fn new(left: i64, right: i64) -> Self {
+        let (mul, wrapped) = left.overflowing_mul(right);
+        MulInfo {
+            wrap_dir: WrapDir(if wrapped {
+                Some(if left.signum() * right.signum() == 1 {
+                    true
+                } else {
+                    false
+                })
+            } else {
+                None
+            }),
+            mul: Number(mul),
+            left,
+            right,
+        }
+    }
+
+    fn split_overflow(self, other: Self) -> (Interval, Option<Interval>) {
+        // we know self <= other
+        match (self.wrap_dir.0, other.wrap_dir.0) {
+            (l, r) if l == r => (Interval {
+                start: self.mul,
+                end: other.mul,
+            }, None),
+            (Some(false), _) => (
+                Interval {
+                    start: self.mul,
+                    end: Number::MAX,
+                },
+                Some(Interval {
+                    start: Number::MIN,
+                    end: other.mul,
+                }),
+            ),
+            (_, Some(true)) => (
+                Interval {
+                    start: other.mul,
+                    end: Number::MAX,
+                },
+                Some(Interval {
+                    start: Number::MIN,
+                    end: self.mul,
+                }),
+            ),
+            (_, _) => unreachable!(),
+        }
+    }
+}
+
 impl Mul<Interval> for Interval {
     type Output = (Self, Option<Self>);
 
-    fn mul(mut self, rhs: Interval) -> Self::Output {
+    fn mul(self, rhs: Interval) -> Self::Output {
         let (start0, end0) = self.to_i128();
         let (start1, end1) = rhs.to_i128();
+        // [a, b] * [c, d] = [min(a*c, a*d, b*c, b*d), max(a*c, a*d, b*c, b*d)], except this gets
+        // hairy when taking into account wrapping. to take into account wrapping, we first exclude
+        // the obvious case where the bounds are at least 2^64 apart, because it would just cover
+        // the entire i64 range underlying Yolol numbers.
         let startstart = start0 * start1;
         let startend = start0 * end1;
         let endstart = end0 * start1;
@@ -708,38 +793,17 @@ impl Mul<Interval> for Interval {
         // split the interval in the case of overflows
         let (start0, end0) = (self.start.0, self.end.0);
         let (start1, end1) = (rhs.start.0, rhs.end.0);
-        let (startstart, startstart_of) = start0.overflowing_mul(start1);
-        let (startend, startend_of) = start0.overflowing_mul(end1);
-        let (endstart, endstart_of) = end0.overflowing_mul(start1);
-        let (endend, endend_of) = end0.overflowing_mul(end1);
-        let start = startstart.min(startend).min(endstart).min(endend);
-        let end = startstart.max(startend).max(endstart).max(endend);
-        let start_of = if start == startstart {
-            startstart_of
-        } else if start == startend {
-            startend_of
-        } else if start == endstart {
-            endstart_of
-        } else if start == endend {
-            endend_of
-        } else {
-            unreachable!()
-        };
-        let end_of = if end == startstart {
-            startstart_of
-        } else if end == startend {
-            startend_of
-        } else if end == endstart {
-            endstart_of
-        } else if end == endend {
-            endend_of
-        } else {
-            unreachable!()
-        };
-        self.start.0 = start / 1000;
-        self.end.0 = end / 1000;
-        // we've checked against a full range, so now we can split any overflows
-        self.split_overflow(start_of, end_of)
+        let startstart = MulInfo::new(start0, start1);
+        let startend = MulInfo::new(start0, end1);
+        let endstart = MulInfo::new(end0, start1);
+        let endend = MulInfo::new(end0, end1);
+        let mut start = startstart.min(startend).min(endstart).min(endend);
+        let mut end = startstart.max(startend).max(endstart).max(endend);
+        // don't forget to get rid of the extra 1000 we multiplied by because of fixed point. we
+        // do it here instead of in MulInfo::new to avoid 2 expensive, unnecessary integer divisions
+        start.mul.0 /= Number::SCALE;
+        end.mul.0 /= Number::SCALE;
+        start.split_overflow(end)
     }
 }
 
