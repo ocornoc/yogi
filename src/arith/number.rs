@@ -1,4 +1,5 @@
 use itertools::Itertools;
+use rand::{prelude::*, distributions::{*, uniform::*}};
 use super::*;
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Default, Arbitrary)]
@@ -209,6 +210,28 @@ impl Number {
     }
 }
 
+impl SampleUniform for Number {
+    type Sampler = Interval;
+}
+
+impl Distribution<Number> for Standard {
+    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Number {
+       Number(self.sample(rng))
+    }
+}
+
+impl Distribution<Number> for Open01 {
+    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Number {
+        (Number(1)..Number(Number::SCALE)).sample_single(rng)
+    }
+}
+
+impl Distribution<Number> for OpenClosed01 {
+    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Number {
+        (Number(1)..=Number(Number::SCALE)).sample_single(rng)
+    }
+}
+
 impl From<bool> for Number {
     fn from(b: bool) -> Self {
         if b {
@@ -410,8 +433,8 @@ impl Rem for Number {
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub struct Interval {
-    start: Number,
-    end: Number,
+    pub start: Number,
+    pub end: Number,
 }
 
 impl Interval {
@@ -490,20 +513,60 @@ impl Interval {
         };
         (self, other)
     }
+
+    fn width(self) -> u64 {
+        abs_diff_number(self.end, self.start)
+    }
+
+    pub fn new(start: Number, end: Number) -> Self {
+        let mut interval = Interval {
+            start,
+            end,
+        };
+        interval.swap_if_necessary();
+        interval
+    }
 }
 
 impl<'a> Arbitrary<'a> for Interval {
     fn arbitrary(u: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
-        let mut interval = Interval {
-            start: u.arbitrary()?,
-            end: u.arbitrary()?,
-        };
-        interval.swap_if_necessary();
-        Ok(interval)
+        Ok(Interval::new(u.arbitrary()?, u.arbitrary()?))
     }
 
     fn size_hint(depth: usize) -> (usize, Option<usize>) {
         arbitrary::size_hint::and(i64::size_hint(depth), i64::size_hint(depth))
+    }
+}
+
+impl UniformSampler for Interval {
+    type X = Number;
+
+    fn new<B1, B2>(low: B1, high: B2) -> Self
+    where
+        B1: SampleBorrow<Self::X> + Sized,
+        B2: SampleBorrow<Self::X> + Sized,
+    {
+        let mut high = high.borrow().clone();
+        high = high.prev().unwrap_or(high);
+        Interval::new(low.borrow().clone(), high)
+    }
+
+    fn new_inclusive<B1, B2>(low: B1, high: B2) -> Self
+    where
+        B1: SampleBorrow<Self::X> + Sized,
+        B2: SampleBorrow<Self::X> + Sized,
+    {
+        Interval::new(low.borrow().clone(), high.borrow().clone())
+    }
+
+    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Self::X {
+        (self.start..=self.end).sample_single(rng)
+    }
+}
+
+impl Distribution<Number> for Interval {
+    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Number {
+        UniformSampler::sample(self, rng)
     }
 }
 
@@ -596,8 +659,8 @@ impl Sub<Interval> for Interval {
 
     fn sub(mut self, rhs: Interval) -> Self::Output {
         let (mut start, mut end) = self.to_i128();
-        start = start - rhs.start.0 as i128;
-        end = end - rhs.end.0 as i128;
+        start = start - rhs.end.0 as i128;
+        end = end - rhs.start.0 as i128;
         // if the subtraction would've had a range at least u64::MAX, then we know that it would
         // completely fill the range of i64 thanks to modular arithmetic and the pigeonhole
         // principle.
@@ -606,8 +669,8 @@ impl Sub<Interval> for Interval {
         }
         // otherwise, we now know the subtraction would not have filled the range, and thus we can
         // split the interval in the case of overflows
-        let (start, start_of) = self.start.0.overflowing_sub(rhs.start.0);
-        let (end, end_of) = self.end.0.overflowing_sub(rhs.end.0);
+        let (start, start_of) = self.start.0.overflowing_sub(rhs.end.0);
+        let (end, end_of) = self.end.0.overflowing_sub(rhs.start.0);
         self.start.0 = start;
         self.end.0 = end;
         // we've checked against a full range, so now we can split any overflows
@@ -672,8 +735,9 @@ impl Mul<Interval> for Interval {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, AsRef, Eq)]
 pub struct NumberIntervals {
+    #[as_ref]
     intervals: Vec<Interval>,
     runtime_error: bool,
 }
@@ -728,6 +792,10 @@ impl NumberIntervals {
         }
     }
 
+    pub fn is_everything(&self) -> bool {
+        self.intervals.as_slice() == &[Interval::from(..)]
+    }
+
     /// An interval containing no number.
     pub fn nothing() -> Self {
         NumberIntervals {
@@ -746,6 +814,16 @@ impl NumberIntervals {
     pub fn reset_runtime_err(&mut self) {
         self.runtime_error = false;
     }
+
+    pub fn contains(&self, number: Number) -> bool {
+        self.as_ref().iter().any(|i| i.contains(&number))
+    }
+}
+
+impl PartialEq for NumberIntervals {
+    fn eq(&self, other: &Self) -> bool {
+        self.intervals == other.intervals
+    }
 }
 
 impl Display for NumberIntervals {
@@ -758,6 +836,23 @@ impl Display for NumberIntervals {
             Display::fmt(end, f)
         } else {
             write!(f, "∅")
+        }
+    }
+}
+
+impl Distribution<Number> for NumberIntervals {
+    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Number {
+        if self.intervals.is_empty() {
+            panic!("Can't sample an empty interval!")
+        } else if let [interval] = self.as_ref().as_slice() {
+            Distribution::sample(interval, rng)
+        } else {
+            let sampler = WeightedIndex::new(
+                self.intervals
+                .iter()
+                .map(|i| i.width()),
+            ).ok().unwrap();
+            Distribution::sample(&self.intervals[sampler.sample(rng)], rng)
         }
     }
 }
@@ -943,6 +1038,14 @@ const fn abs_diff_i128(n: i128, m: i128) -> u128 {
         (m as u128).wrapping_sub(n as u128)
     } else {
         (n as u128).wrapping_sub(m as u128)
+    }
+}
+
+const fn abs_diff_number(Number(n): Number, Number(m): Number) -> u64 {
+    if n < m {
+        (m as u64).wrapping_sub(n as u64)
+    } else {
+        (n as u64).wrapping_sub(m as u64)
     }
 }
 
