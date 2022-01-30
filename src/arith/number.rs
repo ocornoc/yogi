@@ -596,6 +596,9 @@ impl IntoIterator for Interval {
 
 impl Display for Interval {
     fn fmt(&self, f: &mut Formatter) -> FmtResult {
+        if self.start == self.end {
+            write!(f, "{{{}}}", self.start)
+        } else {
         write!(f, "[{}, {}]", self.start, self.end)
     }
 }
