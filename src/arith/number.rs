@@ -1,4 +1,5 @@
 use itertools::Itertools;
+use arrayvec::ArrayVec;
 use rand::{prelude::*, distributions::{*, uniform::*}};
 use super::*;
 
@@ -524,6 +525,36 @@ impl Interval {
         interval.swap_if_necessary();
         interval
     }
+
+    fn mul_no_div<const DIST: u128>(self, rhs: Interval) -> (bool, MulInfo, MulInfo) {
+        let (start0, end0) = self.to_i128();
+        let (start1, end1) = rhs.to_i128();
+        // [a, b] * [c, d] = [min(a*c, a*d, b*c, b*d), max(a*c, a*d, b*c, b*d)], except this gets
+        // hairy when taking into account wrapping. to take into account wrapping, we first exclude
+        // the obvious case where the bounds are at least 2^64 apart, because it would just cover
+        // the entire i64 range underlying Yolol numbers.
+        let startstart = start0 * start1;
+        let startend = start0 * end1;
+        let endstart = end0 * start1;
+        let endend = end0 * end1;
+        let start = startstart.min(startend).min(endstart).min(endend);
+        let end = startstart.max(startend).max(endstart).max(endend);
+        // if the multiplication would've had a range at least u64::MAX, then we know that it would
+        // completely fill the range of i64 thanks to modular arithmetic and the pigeonhole
+        // principle.
+        let filled = abs_diff_i128(start, end) >= DIST;
+        // otherwise, we now know the multiplication would not have filled the range, and thus we
+        // split the interval in the case of overflows
+        let (start0, end0) = (self.start.0, self.end.0);
+        let (start1, end1) = (rhs.start.0, rhs.end.0);
+        let startstart = MulInfo::new(start0, start1);
+        let startend = MulInfo::new(start0, end1);
+        let endstart = MulInfo::new(end0, start1);
+        let endend = MulInfo::new(end0, end1);
+        let start = startstart.min(startend).min(endstart).min(endend);
+        let end = startstart.max(startend).max(endstart).max(endend);
+        (filled, start, end)
+    }
 }
 
 impl<'a> Arbitrary<'a> for Interval {
@@ -769,39 +800,120 @@ impl Mul<Interval> for Interval {
     type Output = (Self, Option<Self>);
 
     fn mul(self, rhs: Interval) -> Self::Output {
-        let (start0, end0) = self.to_i128();
-        let (start1, end1) = rhs.to_i128();
-        // [a, b] * [c, d] = [min(a*c, a*d, b*c, b*d), max(a*c, a*d, b*c, b*d)], except this gets
-        // hairy when taking into account wrapping. to take into account wrapping, we first exclude
-        // the obvious case where the bounds are at least 2^64 apart, because it would just cover
-        // the entire i64 range underlying Yolol numbers.
-        let startstart = start0 * start1;
-        let startend = start0 * end1;
-        let endstart = end0 * start1;
-        let endend = end0 * end1;
-        let start = startstart.min(startend).min(endstart).min(endend);
-        let end = startstart.max(startend).max(endstart).max(endend);
-        // if the multiplication would've had a range at least u64::MAX, then we know that it would
-        // completely fill the range of i64 thanks to modular arithmetic and the pigeonhole
-        // principle.
-        if abs_diff_i128(start, end) >= u64::MAX as u128 {
-            return (Interval::from(..), None);
+        if let (false, mut start, mut end) = self.mul_no_div::<{u64::MAX as u128}>(rhs) {
+            // don't forget to get rid of the extra 1000 we multiplied by because of fixed point. we
+            // do it here instead of in MulInfo::new to avoid 2 expensive, unnecessary integer
+            // divisions.
+            start.mul.0 /= Number::SCALE;
+            end.mul.0 /= Number::SCALE;
+            start.split_overflow(end)
+        } else {
+            (Interval::from(..), None)
         }
-        // otherwise, we now know the multiplication would not have filled the range, and thus we
-        // split the interval in the case of overflows
-        let (start0, end0) = (self.start.0, self.end.0);
-        let (start1, end1) = (rhs.start.0, rhs.end.0);
-        let startstart = MulInfo::new(start0, start1);
-        let startend = MulInfo::new(start0, end1);
-        let endstart = MulInfo::new(end0, start1);
-        let endend = MulInfo::new(end0, end1);
-        let mut start = startstart.min(startend).min(endstart).min(endend);
-        let mut end = startstart.max(startend).max(endstart).max(endend);
-        // don't forget to get rid of the extra 1000 we multiplied by because of fixed point. we
-        // do it here instead of in MulInfo::new to avoid 2 expensive, unnecessary integer divisions
-        start.mul.0 /= Number::SCALE;
-        end.mul.0 /= Number::SCALE;
-        start.split_overflow(end)
+    }
+}
+
+fn int_div_no_wrap(array: &mut ArrayVec<Interval, 12>, mut lhs: Interval, rhs: Interval) {
+    let startstart = lhs.start.0 / rhs.start.0;
+    let startend = lhs.start.0 / rhs.end.0;
+    let endstart = lhs.end.0 / rhs.start.0;
+    let endend = lhs.end.0 / rhs.end.0;
+    lhs.start.0 = startstart.min(startend).min(endstart).min(endend);
+    lhs.end.0 = startstart.max(startend).max(endstart).max(endend);
+    array.push(lhs);
+}
+
+fn int_split_at<const SPLIT: i64>(mut interval: Interval) -> (ArrayVec<Interval, 2>, bool) {
+    let split = Number(SPLIT);
+    let splitp1 = Number(SPLIT + 1);
+    let mut array = ArrayVec::new();
+    if interval.contains(&split) {
+        match (interval.start == split, interval.end == split) {
+            (true, true) => (),
+            (true, false) => {
+                interval.start = splitp1;
+                array.push(interval);
+            },
+            (false, true) => {
+                interval.end = Number(SPLIT - 1);
+                array.push(interval);
+            },
+            (false, false) => {
+                array.push(Interval {
+                    end: Number(SPLIT - 1),
+                    ..interval
+                });
+                array.push(Interval {
+                    start: splitp1,
+                    ..interval
+                });
+            },
+        }
+        (array, true)
+    } else {
+        array.push(interval);
+        (array, false)
+    }
+}
+
+fn int_div_no_zero(array: &mut ArrayVec<Interval, 12>, orig_lhs: Interval, orig_rhs: Interval) {
+    let (lhs, lhs_split) = int_split_at::<{Number::MIN.0}>(orig_lhs);
+    let (rhs, rhs_split) = int_split_at::<-1>(orig_rhs);
+    let mut need_to_handle_wrap = true;
+    need_to_handle_wrap &= lhs_split;  // if lhs doesn't include Number::MIN, wrap is impossible
+    need_to_handle_wrap &= rhs_split;  // if rhs doesn't include Number(-1), wrap is impossible
+    if need_to_handle_wrap {
+        // orig_lhs includes Number::MIN and rhs includes Number(-1)
+        // first, let's deal with the wrap
+        array.push(Number::MIN.into());
+        // next, we'll divide the split lhs intervals by the original rhs (can't wrap)
+        for lhs in lhs {
+            int_div_no_wrap(array, lhs, orig_rhs);
+        }
+        // finally, we'll divide the original lhs by the split rhs intervals (can't wrap)
+        for rhs in rhs {
+            int_div_no_wrap(array, orig_lhs, rhs);
+        }
+    } else {
+        // no possibility of wrap
+        int_div_no_wrap(array, orig_lhs, orig_rhs);
+    }
+}
+
+impl Div<Interval> for Interval {
+    type Output = (ArrayVec<Interval, 12>, bool);
+
+    fn div(self, rhs: Interval) -> Self::Output {
+        const DIST: u128 = (u64::MAX as u128) * (Number::SCALE as u128);
+        let mut array = ArrayVec::new();
+        // if the right hand side contains a zero, we need to splice it out in case of runtime error
+        // we do this by splitting the interval into 0, 1, or 2 parts and merge the intervals from
+        // each division
+        if rhs.contains(&Number::ZERO) {
+            let (rhs, _) = int_split_at::<0>(rhs);
+            for rhs in rhs {
+                let (intervals, _) = self / rhs;
+                array.extend(intervals);
+            }
+            (array, true)
+        } else if let (false, self0, self1) = self.mul_no_div::<DIST>(Number::ONE.into()) {
+            // if we can multiply by 1 *excluding rescaling down* without filling the entire range,
+            // then we can split the one or two resulting intervals to get the results. this is
+            // essentially a multiplication by 1000, which is present in the real definition of
+            // division.
+            let (self0, self1) = self0.split_overflow(self1);
+            // now we need to be careful about division by Number(-1). this is the only case where
+            // division can wrap, and it wraps to Number::MIN. int_div_aux handles this.
+            int_div_no_zero(&mut array, self0, rhs);
+            if let Some(self1) = self1 {
+                int_div_no_zero(&mut array, self1, rhs);
+            }
+            (array, false)
+        } else {
+            // we couldn't multiply by 1 without filling the entire range, so we know the result
+            array.push(Interval::from(..));
+            (array, false)
+        }
     }
 }
 
@@ -1103,6 +1215,46 @@ impl Mul<Number> for NumberIntervals {
     }
 }
 
+impl DivAssign<&NumberIntervals> for NumberIntervals {
+    fn div_assign(&mut self, rhs: &NumberIntervals) {
+        let mut old_intervals = Vec::with_capacity(2 * self.intervals.len() * rhs.intervals.len());
+        std::mem::swap(&mut old_intervals, &mut self.intervals);
+
+        for (l, &r) in old_intervals.into_iter().cartesian_product(rhs.intervals.iter()) {
+            let (intervals, runtime_error) = l / r;
+            self.runtime_error |= runtime_error;
+            self.intervals.extend(intervals);
+        }
+
+        self.rebuild();
+    }
+}
+
+impl Div<&NumberIntervals> for NumberIntervals {
+    type Output = Self;
+
+    fn div(mut self, rhs: &NumberIntervals) -> Self::Output {
+        self /= rhs;
+        self
+    }
+}
+
+impl DivAssign<Number> for NumberIntervals {
+    fn div_assign(&mut self, rhs: Number) {
+        let intervals: NumberIntervals = rhs.into();
+        *self /= &intervals;
+    }
+}
+
+impl Div<Number> for NumberIntervals {
+    type Output = Self;
+
+    fn div(mut self, rhs: Number) -> Self::Output {
+        self /= rhs;
+        self
+    }
+}
+
 const fn abs_diff_i128(n: i128, m: i128) -> u128 {
     if n < m {
         (m as u128).wrapping_sub(n as u128)
@@ -1277,6 +1429,32 @@ mod tests {
         intervals = Number::MAX.into();
         intervals2 = Number::new(1.0).into();
         intervals *= &intervals2;
-        println!("{}", intervals);
+        assert_eq!(intervals.intervals, [Number::new(-0.001).into()]);
+    }
+
+    #[test]
+    fn interval_division() {
+        let mut intervals = NumberIntervals::from(Number::new(12.0));
+        let mut intervals2 = NumberIntervals::from(Number::new(3.0));
+        intervals /= &intervals2;
+        assert!(!intervals.could_runtime_err());
+        assert_eq!(intervals.intervals, [Number::new(4.0).into()]);
+        intervals = NumberIntervals {
+            intervals: vec![
+                Interval::from(Number::new(-2.0)..=Number::new(-1.0)),
+            ],
+            runtime_error: false,
+        };
+        intervals2 = NumberIntervals {
+            intervals: vec![
+                Interval::from(Number::new(1.0)..=Number::new(2.0)),
+            ],
+            runtime_error: false,
+        };
+        intervals /= &intervals2;
+        assert!(!intervals.could_runtime_err());
+        assert_eq!(intervals.intervals, [
+            Interval::from(Number::new(-2.0)..=Number::new(-0.5)),
+        ]);
     }
 }

@@ -27,6 +27,9 @@ struct Cli {
     /// Parse a multiplication cov
     #[clap(long)]
     mul: bool,
+    /// Parse a division cov
+    #[clap(long)]
+    div: bool,
     path: PathBuf,
 }
 
@@ -35,6 +38,7 @@ fn main() {
         add,
         sub,
         mul,
+        div,
         path,
     } = Cli::parse();
     let bytes: Vec<_> = File::open(path).unwrap().bytes().try_collect().unwrap();
@@ -120,6 +124,50 @@ fn main() {
                 println!("UNCONTAINED!");
             }
         }
+    } else if div {
+        left /= &right;
+        if let Some((left_min, left_max, right_min, right_max)) = left_right_min_max {
+            let min_min = left_min / right_min;
+            let min_max = left_min / right_max;
+            let max_min = left_max / right_min;
+            let max_max = left_max / right_max;
+            if let Ok(min_min) = min_min {
+                println!("min * min: {}", min_min);
+                if !left.contains(min_min) {
+                    println!("UNCONTAINED!");
+                }
+            } else {
+                println!("min * min: runtime error");
+            }
+
+            if let Ok(min_max) = min_max {
+                println!("min * max: {}", min_max);
+                if !left.contains(min_max) {
+                    println!("UNCONTAINED!");
+                }
+            } else {
+                println!("min * max: runtime error");
+            }
+
+            if let Ok(max_min) = max_min {
+                println!("max * min: {}", max_min);
+                if !left.contains(max_min) {
+                    println!("UNCONTAINED!");
+                }
+            } else {
+                println!("max * min: runtime error");
+            }
+
+            if let Ok(max_max) = max_max {
+                println!("max * max: {}", max_max);
+                if !left.contains(max_max) {
+                    println!("UNCONTAINED!");
+                }
+            } else {
+                println!("max * max: runtime error");
+            }
+        }
+        println!("Could runtime error? {}", left.could_runtime_err());
     } else {
         println!("You forgot to select a mode.");
         return;
