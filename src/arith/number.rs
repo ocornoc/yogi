@@ -177,7 +177,7 @@ impl Number {
 
     pub fn fact(self) -> Self {
         if self.0.is_negative() {
-            Number::ZERO
+            Number::MIN
         } else {
             let mut v = self.0 / Number::SCALE;
             let mut i = 0;
