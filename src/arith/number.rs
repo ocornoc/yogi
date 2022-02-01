@@ -737,12 +737,10 @@ impl Ord for WrapDir {
     }
 }
 
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 struct MulInfo {
     wrap_dir: WrapDir,
     mul: Number,
-    left: i64,
-    right: i64,
 }
 
 impl MulInfo {
@@ -750,17 +748,11 @@ impl MulInfo {
         let (mul, wrapped) = left.overflowing_mul(right);
         MulInfo {
             wrap_dir: WrapDir(if wrapped {
-                Some(if left.signum() * right.signum() == 1 {
-                    true
-                } else {
-                    false
-                })
+                Some(left.signum() * right.signum() == 1)
             } else {
                 None
             }),
             mul: Number(mul),
-            left,
-            right,
         }
     }
 
