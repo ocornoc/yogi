@@ -49,8 +49,7 @@ impl Number {
     pub fn stringify_with_buffer(&self, buffer: &mut YString) {
         let data = buffer.data.as_mut();
         let int = self.0 / Self::SCALE;
-        let mut dec = (self.0 % Self::SCALE).unsigned_abs() as u32;
-        let neg = int.is_negative();
+        let mut dec = self.0.rem(Self::SCALE).unsigned_abs() as u32;
 
         let mut int = int.unsigned_abs();
         let mut rem;
@@ -67,7 +66,7 @@ impl Number {
             }
         }
 
-        if neg {
+        if self.0.is_negative() {
             unsafe { data.push_unchecked(b'-'); }
         }
 
@@ -92,8 +91,7 @@ impl Number {
             }
         }
 
-        let len = data.len();
-        data[old_len..len].reverse();
+        data[old_len..].reverse();
     }
 
     pub fn stringify(&self) -> YString {
