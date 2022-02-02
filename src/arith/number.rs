@@ -376,7 +376,7 @@ impl Neg for Number {
     type Output = Self;
 
     fn neg(self) -> Self::Output {
-        Number(self.0.overflowing_neg().0)
+        Number(self.0.wrapping_neg())
     }
 }
 
