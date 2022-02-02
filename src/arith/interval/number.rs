@@ -1020,5 +1020,30 @@ mod tests {
         assert_eq!(intervals.intervals, [
             Interval::from(Number::new(-2.0)..=Number::new(-0.5)),
         ]);
+        intervals = Number::MAX.into();
+        intervals2 = Number::ONE.into();
+        intervals /= &intervals2;
+        assert!(!intervals.could_runtime_err());
+        assert_eq!(intervals.intervals, [Number(-1).into()]);
+        intervals = Number::MAX.into();
+        intervals2 = Number::ONE.into();
+        intervals /= &intervals2;
+        assert!(!intervals.could_runtime_err());
+        assert_eq!(intervals.intervals, [Number(-1).into()]);
+        intervals = Number::MAX.into();
+        intervals2 = (-Number::ONE).into();
+        intervals /= &intervals2;
+        assert!(!intervals.could_runtime_err());
+        assert_eq!(intervals.intervals, [Number(1).into()]);
+        intervals = Number::MIN.into();
+        intervals2 = Number::ONE.into();
+        intervals /= &intervals2;
+        assert!(!intervals.could_runtime_err());
+        assert_eq!(intervals.intervals, [Number::ZERO.into()]);
+        intervals = Number::MIN.into();
+        intervals2 = (-Number::ONE).into();
+        intervals /= &intervals2;
+        assert!(!intervals.could_runtime_err());
+        assert_eq!(intervals.intervals, [Number::ZERO.into()]);
     }
 }
