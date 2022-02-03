@@ -781,7 +781,7 @@ impl Mul<Number> for NumberIntervals {
 
 impl DivAssign<&NumberIntervals> for NumberIntervals {
     fn div_assign(&mut self, rhs: &NumberIntervals) {
-        let mut old_intervals = Vec::with_capacity(2 * self.intervals.len() * rhs.intervals.len());
+        let mut old_intervals = Vec::with_capacity(12 * self.intervals.len() * rhs.intervals.len());
         std::mem::swap(&mut old_intervals, &mut self.intervals);
 
         for (l, &r) in old_intervals.into_iter().cartesian_product(rhs.intervals.iter()) {
