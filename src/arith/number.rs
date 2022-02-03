@@ -47,49 +47,15 @@ impl Number {
     pub fn stringify_with_buffer(&self, buffer: &mut YString) {
         let data = buffer.data.as_mut();
         let int = self.0 / Self::SCALE;
-        let mut dec = self.0.rem(Self::SCALE).unsigned_abs() as u32;
-
-        let mut int = int.unsigned_abs();
-        let mut rem;
-        loop {
-            rem = (int % 10) as u32;
-            int /= 10;
-            unsafe {
-                let c = std::char::from_digit(rem, 10)
-                    .unwrap_or_else(|| std::hint::unreachable_unchecked());
-                data.push_unchecked(c as u8);
-            }
-            if int == 0 {
-                break;
-            }
+        let dec = self.0.rem(Self::SCALE);
+        if !int.is_negative() && dec.is_negative() {
+            data.push(b'-');
         }
-
-        if self.0.is_negative() {
-            unsafe { data.push_unchecked(b'-'); }
+        data.extend(int.to_string().bytes());
+        if dec != 0 {
+            let s = format!(".{:0>3}", dec.unsigned_abs());
+            data.extend(s.bytes());
         }
-
-        data.reverse();
-        if dec == 0 {
-            return;
-        }
-
-        unsafe { data.push_unchecked(b'.'); }
-        let old_len = data.len();
-
-        for _ in 0..3 {
-            rem = dec % 10;
-            dec /= 10;
-            unsafe {
-                let c = std::char::from_digit(rem, 10)
-                    .unwrap_or_else(|| std::hint::unreachable_unchecked());
-                data.push_unchecked(c as u8);
-            }
-            if dec == 0 {
-                break;
-            }
-        }
-
-        data[old_len..].reverse();
     }
 
     pub fn stringify(&self) -> YString {
