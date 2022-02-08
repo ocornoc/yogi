@@ -97,7 +97,7 @@ impl Number {
     }
 
     pub fn abs(self) -> Self {
-        Number(self.0.overflowing_abs().0)
+        Number(self.0.wrapping_abs())
     }
 
     pub fn sqrt(self) -> Self {
@@ -390,5 +390,17 @@ impl Rem for Number {
         } else {
             Ok(Number(self.0.wrapping_rem(rhs.0)))
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_edge_cases() {
+        assert_eq!((Number::MIN % Number(-1)).unwrap(), Number::ZERO);
+        assert_eq!((Number::MIN / Number(-1)).unwrap(), Number::ZERO);
+        assert_eq!(Number::MIN * Number(-1), Number(Number::MIN.0 / Number::SCALE));
     }
 }
