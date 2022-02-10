@@ -98,7 +98,7 @@ impl Interval {
         interval
     }
 
-    fn mul_no_div<const DIST: u128>(self, rhs: Interval) -> (bool, MulInfo, MulInfo) {
+    fn mul_no_div_aux_i128(self, rhs: Interval) -> (i128, i128) {
         let (start0, end0) = self.to_i128();
         let (start1, end1) = rhs.to_i128();
         // [a, b] * [c, d] = [min(a*c, a*d, b*c, b*d), max(a*c, a*d, b*c, b*d)], except this gets
@@ -111,12 +111,10 @@ impl Interval {
         let endend = end0 * end1;
         let start = startstart.min(startend).min(endstart).min(endend);
         let end = startstart.max(startend).max(endstart).max(endend);
-        // if the multiplication would've had a range at least u64::MAX, then we know that it would
-        // completely fill the range of i64 thanks to modular arithmetic and the pigeonhole
-        // principle.
-        let filled = abs_diff_i128(start, end) >= DIST;
-        // otherwise, we now know the multiplication would not have filled the range, and thus we
-        // split the interval in the case of overflows
+        (start, end)
+    }
+
+    fn mul_no_div_aux_info(self, rhs: Interval) -> (MulInfo, MulInfo) {
         let (start0, end0) = (self.start.0, self.end.0);
         let (start1, end1) = (rhs.start.0, rhs.end.0);
         let startstart = MulInfo::new(start0, start1);
@@ -125,6 +123,18 @@ impl Interval {
         let endend = MulInfo::new(end0, end1);
         let start = startstart.min(startend).min(endstart).min(endend);
         let end = startstart.max(startend).max(endstart).max(endend);
+        (start, end)
+    }
+
+    fn mul_no_div<const DIST: u128>(self, rhs: Interval) -> (bool, MulInfo, MulInfo) {
+        let (start, end) = self.mul_no_div_aux_i128(rhs);
+        // if the multiplication would've had a range at least u64::MAX, then we know that it would
+        // completely fill the range of i64 thanks to modular arithmetic and the pigeonhole
+        // principle.
+        let filled = abs_diff_i128(start, end) >= DIST;
+        // otherwise, we now know the multiplication would not have filled the range, and thus we
+        // split the interval in the case of overflows
+        let (start, end) = self.mul_no_div_aux_info(rhs);
         (filled, start, end)
     }
 }
@@ -481,6 +491,150 @@ impl Div<Interval> for Interval {
     }
 }
 
+fn interval_largest_multiple(interval: Interval, m: Number) -> Option<Number> {
+    let candidate = Number(interval.end.0 - interval.end.0 % m.0);
+    if interval.contains(&candidate) {
+        Some(candidate)
+    } else {
+        None
+    }
+}
+
+fn interval_rem_pos_pos(array: &mut ArrayVec<Interval, 16>, lhs: Interval, rhs: Interval) {
+    let lhs_width = abs_diff_number(lhs.start, lhs.end);
+    // if the lhs would cover the rhs at least once, then we can just return the full range
+    if rhs.end.0 as u64 <= lhs_width {
+        array.push(Interval::from(Number::ZERO..rhs.end));
+        return;
+    } else if rhs.start == rhs.end {
+        if let Some(largest) = interval_largest_multiple(lhs, rhs.start) {
+            if largest != lhs.start {
+                array.push(Interval {
+                    start: Number(lhs.start.0 % rhs.start.0),
+                    end: rhs.start.prev().unwrap(),
+                });
+            }
+            array.push(Interval {
+                start: Number::ZERO,
+                end: Number(lhs.end.0 % rhs.start.0),
+            });
+        } else {
+            array.push(Interval {
+                start: Number(lhs.start.0 % rhs.start.0),
+                end: Number(lhs.end.0 % rhs.start.0),
+            });
+        }
+        return;
+    }
+    // cop-out: actually calculating it is hard!
+    array.push(Interval::from(Number::ZERO..rhs.end));
+}
+
+fn interval_rem_min_pos(array: &mut ArrayVec<Interval, 16>, rhs: Interval) {
+    // cop-out: actually calculating it is hard!
+    array.push(Interval::from((-rhs.end).next().unwrap()..=Number::ZERO));
+}
+
+fn interval_rem_aux(
+    mut orig_lhs: Interval,
+    mut orig_rhs: Interval,
+) -> (ArrayVec<Interval, 16>, bool) {
+    let mut array = ArrayVec::new_const();
+    // if the right hand side contains a zero, we need to splice it out in case of runtime error
+    // we do this by splitting the interval into 0, 1, or 2 parts and merge the intervals from
+    // each division
+    if orig_rhs.contains(&Number::ZERO) {
+        let (rhs, _) = int_split_at::<0>(orig_rhs);
+        for rhs in rhs {
+            let (intervals, _) = interval_rem_aux(orig_lhs, rhs);
+            array.extend(intervals);
+        }
+        (array, true)
+    // we've filtered out the zeros, and now we filter out the case of MIN % _
+    } else if orig_lhs.contains(&Number::MIN) && orig_rhs.contains(&Number(-1)) {
+        let (lhs, _) = int_split_at::<{Number::MIN.0}>(orig_lhs);
+        let (rhs, _) = int_split_at::<-1>(orig_rhs);
+        for lhs in lhs.clone() {
+            let (intervals, _) = interval_rem_aux(lhs, orig_rhs);
+            array.extend(intervals);
+        }
+        for rhs in rhs {
+            let (intervals, _) = interval_rem_aux(orig_lhs, rhs);
+            array.extend(intervals);
+        }
+        array.push(Number::ZERO.into());
+        (array, false)
+    // because there's no MIN in lhs, we can split at zero on lhs
+    } else if orig_lhs.contains(&Number::ZERO) {
+        let (lhs, _) = int_split_at::<0>(orig_lhs);
+        for lhs in lhs.clone() {
+            let (intervals, _) = interval_rem_aux(lhs, orig_rhs);
+            array.extend(intervals);
+        }
+        array.push(Number::ZERO.into());
+        (array, false)
+    } else if orig_rhs.contains(&Number::MIN) {
+        let (rhs, _) = int_split_at::<{Number::MIN.0}>(orig_rhs);
+        for rhs in rhs {
+            let (intervals, _) = interval_rem_aux(orig_lhs, rhs);
+            array.extend(intervals);
+        }
+        let negate = orig_lhs.start.0.is_negative();
+        orig_lhs.start = orig_lhs.start.abs();
+        orig_lhs.end = orig_lhs.end.abs();
+        orig_lhs.swap_if_necessary();
+        let len = array.len();
+        interval_rem_pos_pos(&mut array, orig_lhs, Number::MIN.into());
+        if negate {
+            for interval in array[len..].iter_mut() {
+                interval.start = -interval.start;
+                interval.end = -interval.end;
+            }
+        }
+        (array, false)
+    } else if orig_lhs.contains(&Number::MIN) {
+        let (lhs, _) = int_split_at::<{Number::MIN.0}>(orig_lhs);
+        for lhs in lhs {
+            let (intervals, _) = interval_rem_aux(lhs, orig_rhs);
+            array.extend(intervals);
+        }
+        orig_rhs.start = orig_rhs.start.abs();
+        orig_rhs.end = orig_rhs.end.abs();
+        orig_rhs.swap_if_necessary();
+        interval_rem_min_pos(&mut array, orig_rhs);
+        (array, false)
+    } else {
+        let negate = orig_lhs.start.0.is_negative();
+        orig_lhs.start = orig_lhs.start.abs();
+        orig_lhs.end = orig_lhs.end.abs();
+        orig_lhs.swap_if_necessary();
+        orig_rhs.start = orig_rhs.start.abs();
+        orig_rhs.end = orig_rhs.end.abs();
+        orig_rhs.swap_if_necessary();
+        let len = array.len();
+        interval_rem_pos_pos(&mut array, orig_lhs, orig_rhs);
+        if negate {
+            for interval in array[len..].iter_mut() {
+                interval.start = -interval.start;
+                interval.end = -interval.end;
+            }
+        }
+        (array, false)
+    }
+}
+
+impl Rem for Interval {
+    type Output = (ArrayVec<Interval, 16>, bool);
+
+    fn rem(self, rhs: Self) -> Self::Output {
+        let (mut array, runtime_error) = interval_rem_aux(self, rhs);
+        for interval in array.iter_mut() {
+            interval.swap_if_necessary();
+        }
+        (array, runtime_error)
+    }
+}
+
 #[derive(Debug, Clone, AsRef, Eq)]
 pub struct NumberIntervals {
     #[as_ref]
@@ -819,6 +973,46 @@ impl Div<Number> for NumberIntervals {
     }
 }
 
+impl RemAssign<&NumberIntervals> for NumberIntervals {
+    fn rem_assign(&mut self, rhs: &NumberIntervals) {
+        let mut old_intervals = Vec::with_capacity(4 * self.intervals.len() * rhs.intervals.len());
+        std::mem::swap(&mut old_intervals, &mut self.intervals);
+
+        for (l, &r) in old_intervals.into_iter().cartesian_product(rhs.intervals.iter()) {
+            let (intervals, runtime_error) = l % r;
+            self.runtime_error |= runtime_error;
+            self.intervals.extend(intervals);
+        }
+
+        self.rebuild();
+    }
+}
+
+impl Rem<&NumberIntervals> for NumberIntervals {
+    type Output = Self;
+
+    fn rem(mut self, rhs: &NumberIntervals) -> Self::Output {
+        self %= rhs;
+        self
+    }
+}
+
+impl RemAssign<Number> for NumberIntervals {
+    fn rem_assign(&mut self, rhs: Number) {
+        let intervals: NumberIntervals = rhs.into();
+        *self %= &intervals;
+    }
+}
+
+impl Rem<Number> for NumberIntervals {
+    type Output = Self;
+
+    fn rem(mut self, rhs: Number) -> Self::Output {
+        self %= rhs;
+        self
+    }
+}
+
 const fn abs_diff_i128(n: i128, m: i128) -> u128 {
     if n < m {
         (m as u128).wrapping_sub(n as u128)
@@ -1045,5 +1239,105 @@ mod tests {
         intervals /= &intervals2;
         assert!(!intervals.could_runtime_err());
         assert_eq!(intervals.intervals, [Number::ZERO.into()]);
+    }
+
+    #[test]
+    fn interval_rem() {
+        let mut intervals = NumberIntervals::from(Number::new(12.0));
+        let mut intervals2 = NumberIntervals::from(Number::new(3.0));
+        intervals %= &intervals2;
+        assert!(!intervals.could_runtime_err());
+        assert_eq!(intervals.intervals, [Number::ZERO.into()]);
+        intervals = Number::new(12.0).into();
+        intervals2 = Number::new(5.0).into();
+        intervals %= &intervals2;
+        assert!(!intervals.could_runtime_err());
+        assert_eq!(intervals.intervals, [Number::new(2.0).into()]);
+        intervals = Number::new(-12.0).into();
+        intervals2 = Number::new(3.0).into();
+        intervals %= &intervals2;
+        assert!(!intervals.could_runtime_err());
+        assert_eq!(intervals.intervals, [Number::ZERO.into()]);
+        intervals = Number::new(-12.0).into();
+        intervals2 = Number::new(5.0).into();
+        intervals %= &intervals2;
+        assert!(!intervals.could_runtime_err());
+        assert_eq!(intervals.intervals, [Number::new(-2.0).into()]);
+        intervals = Number::new(27.0).into();
+        intervals2.intervals = vec![Interval::from(Number::new(7.0)..=Number::new(8.0))];
+        intervals %= &intervals2;
+        assert!(!intervals.could_runtime_err());
+        assert_eq!(intervals.intervals, [Interval::from(Number::ZERO..Number::new(8.0))]);
+        intervals.intervals = vec![Number::new(5.0).into(), Number::new(6.0).into()];
+        intervals2 = Number::new(3.0).into();
+        intervals %= &intervals2;
+        assert!(!intervals.could_runtime_err());
+        assert_eq!(intervals.intervals, [Number::ZERO.into(), Number::new(2.0).into()]);
+        intervals.intervals = vec![
+            Interval::from(Number::new(71776119061217.279)..=Number::new(9187201950427381.888)),
+            Number::new(9187201950435737.471).into(),
+        ];
+        intervals2 = Number::new(9187201950435737.471).into();
+        intervals %= &intervals2;
+        assert!(!intervals.could_runtime_err());
+        assert_eq!(intervals.intervals, [
+            Number::ZERO.into(),
+            Interval::from(Number::new(71776119061217.279)..=Number::new(9187201950427381.888)),
+        ]);
+        intervals = Number::new(5.0).into();
+        intervals2.intervals = vec![Interval::from(Number::new(2.0)..=Number::new(3.0))];
+        intervals %= &intervals2;
+        assert!(!intervals.could_runtime_err());
+        assert_eq!(intervals.intervals, [Interval::from(Number::ZERO..Number::new(3.0))]);
+        intervals.intervals = vec![
+            Interval::from(Number::new(-0.129)..=Number::new(1099511627.775)),
+        ];
+        intervals2.intervals = vec![
+            Interval::from(Number::new(-0.001)..=Number::new(16777.215)),
+        ];
+        intervals %= &intervals2;
+        assert!(intervals.could_runtime_err());
+        assert_eq!(intervals.intervals, [
+            Interval::from(Number::new(-16777.214)..=Number::new(16777.214)),
+        ]);
+        intervals.reset_runtime_err();
+        intervals.intervals = vec![
+            Interval::from(Number(-9222790894089797632)..=Number::new(262.148)),
+        ];
+        intervals2.intervals = vec![
+            Interval::from(Number(-4971411038663605760)..=Number(68961369294110720)),
+        ];
+        intervals %= &intervals2;
+        assert!(intervals.could_runtime_err());
+        assert_eq!(intervals.intervals, [
+            Interval::from(Number(-4971411038663605759)..=Number(4971411038663605759)),
+        ]);
+        intervals.reset_runtime_err();
+        intervals.intervals = vec![
+            Interval::from(Number::new(-17592186044.417)..=Number::new(-0.129)),
+            Interval::from(Number::new(-0.001)..=Number::new(4398046511.359)),
+        ];
+        intervals2.intervals = vec![
+            Interval::from(Number::MIN..=Number::new(-0.001)),
+        ];
+        intervals %= &intervals2;
+        assert!(!intervals.could_runtime_err());
+        assert_eq!(intervals.intervals, [
+            Interval::from(Number(-9223372036854775806)..Number::MAX),
+        ]);
+        intervals.reset_runtime_err();
+        intervals.intervals = vec![
+            Number::MIN.into(),
+            Interval::from(Number(-36170086435815553)..=Number::MAX),
+        ];
+        intervals2.intervals = vec![
+            Number(-4629771061636907073).into(),
+            Interval::from(Number(-4539628415531089920)..=Number(43910186561175552)),
+        ];
+        intervals %= &intervals2;
+        assert!(intervals.could_runtime_err());
+        assert_eq!(intervals.intervals, [
+            Interval::from(Number(-4629771061636907072)..=Number(4629771061636907072)),
+        ]);
     }
 }
