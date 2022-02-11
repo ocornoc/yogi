@@ -4,13 +4,13 @@ use std::fs::File;
 use arbitrary::Unstructured;
 use clap::Parser;
 use itertools::Itertools;
-use yogi::arith::{NumberIntervals, Interval, Number};
+use yogi::arith::{NumberIntervals, NumberInterval, Number};
 
 fn get_intervals(s: &[u8]) -> (NumberIntervals, NumberIntervals) {
     Unstructured::new(s).arbitrary().unwrap()
 }
 
-fn get_min_max(intervals: &[Interval]) -> Option<(Number, Number)> {
+fn get_min_max(intervals: &[NumberInterval]) -> Option<(Number, Number)> {
     Some((intervals.first()?.start, intervals.last()?.end))
 }
 

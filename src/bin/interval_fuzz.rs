@@ -1,9 +1,9 @@
 #[cfg(target_os = "linux")]
 mod everything {
     use honggfuzz::fuzz;
-    use yogi::arith::{NumberIntervals, Number, Interval};
+    use yogi::arith::{NumberIntervals, NumberInterval, Number};
 
-    fn get_min_max(intervals: &[Interval]) -> Option<(Number, Number)> {
+    fn get_min_max(intervals: &[NumberInterval]) -> Option<(Number, Number)> {
         Some((intervals.first()?.start, intervals.last()?.end))
     }
     

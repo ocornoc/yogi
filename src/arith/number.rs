@@ -173,7 +173,7 @@ impl Number {
 }
 
 impl SampleUniform for Number {
-    type Sampler = Interval;
+    type Sampler = NumberInterval;
 }
 
 impl Distribution<Number> for Standard {
