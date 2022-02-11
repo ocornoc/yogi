@@ -137,6 +137,19 @@ impl Interval {
         let (start, end) = self.mul_no_div_aux_info(rhs);
         (filled, start, end)
     }
+
+    fn abs(mut self) -> (Self, Option<Self>) {
+        let extra = if self.start == Number::MIN {
+            self.start = -Number::MAX;
+            Some(Number::MIN.into())
+        } else {
+            None
+        };
+        self.start = self.start.abs();
+        self.end = self.end.abs();
+        self.swap_if_necessary();
+        (self, extra)
+    }
 }
 
 impl<'a> Arbitrary<'a> for Interval {
@@ -635,6 +648,28 @@ impl Rem for Interval {
     }
 }
 
+impl Not for Interval {
+    type Output = (Self, Option<Self>);
+
+    fn not(self) -> Self::Output {
+        let one = if self.contains(&Number::ZERO) {
+            Some(Number::ONE.into())
+        } else {
+            None
+        };
+        let zero = if self != Number::ZERO.into() {
+            Some(Number::ZERO.into())
+        } else {
+            None
+        };
+        match (zero, one) {
+            (None, None) => unreachable!(),
+            (Some(i), None) | (None, Some(i)) => (i, None),
+            (Some(i), i2@Some(_)) => (i, i2),
+        }
+    }
+}
+
 #[derive(Debug, Clone, AsRef, Eq)]
 pub struct NumberIntervals {
     #[as_ref]
@@ -717,6 +752,167 @@ impl NumberIntervals {
 
     pub fn contains(&self, number: Number) -> bool {
         self.as_ref().iter().any(|i| i.contains(&number))
+    }
+
+    pub fn pre_inc(&mut self) {
+        *self += Number::ONE;
+    }
+
+    pub fn pre_dec(&mut self) {
+        *self -= Number::ONE;
+    }
+
+    pub fn abs(&mut self) {
+        let mut old_intervals = Vec::with_capacity(2 * self.intervals.len());
+        std::mem::swap(&mut old_intervals, &mut self.intervals);
+
+        for l in old_intervals.into_iter() {
+            let (i0, i1) = l.abs();
+            self.intervals.push(i0);
+            self.intervals.extend(i1);
+        }
+
+        self.rebuild();
+    }
+
+    pub fn sqrt(&mut self) {
+        // TODO: Placeholder
+        self.intervals.clear();
+        self.intervals.push(Interval::from(..));
+    }
+
+    pub fn sin(&mut self) {
+        // TODO: Placeholder
+        self.intervals.clear();
+        self.intervals.push(Interval::from(-Number::ONE..=Number::ONE));
+    }
+
+    pub fn cos(&mut self) {
+        // TODO: Placeholder
+        self.intervals.clear();
+        self.intervals.push(Interval::from(-Number::ONE..=Number::ONE));
+    }
+
+    pub fn tan(&mut self) {
+        // TODO: Placeholder
+        self.intervals.clear();
+        self.intervals.push(Interval::from(..));
+    }
+
+    pub fn asin(&mut self) {
+        // TODO: Placeholder
+        self.intervals.clear();
+        self.intervals.push(Interval::from(..));
+    }
+
+    pub fn acos(&mut self) {
+        // TODO: Placeholder
+        self.intervals.clear();
+        self.intervals.push(Interval::from(..));
+    }
+
+    pub fn atan(&mut self) {
+        // TODO: Placeholder
+        self.intervals.clear();
+        self.intervals.push(Interval::from(..));
+    }
+
+    pub fn fact(&mut self) {
+        // TODO: Placeholder
+        self.intervals.clear();
+        self.intervals.push(Interval::from(..));
+    }
+
+    pub fn intersect(&self, other: &NumberIntervals) -> Self {
+        let mut intervals = Vec::with_capacity(self.as_ref().len() * other.as_ref().len());
+        for (&lhs, &rhs) in self.intervals.iter().cartesian_product(other.intervals.iter()) {
+            let interval = Interval {
+                start: lhs.start.max(rhs.start),
+                end: lhs.end.min(rhs.end),
+            };
+            if interval.start <= interval.end {
+                intervals.push(interval);
+            }
+        }
+        NumberIntervals {
+            intervals,
+            runtime_error: false,
+        }
+    }
+
+    pub fn is_disjoint(&self, other: &NumberIntervals) -> bool {
+        self.intersect(other).as_ref().is_empty()
+    }
+
+    pub fn is_constant(&self) -> Option<Number> {
+        match self.intervals.as_slice() {
+            [i] if i.start == i.end => Some(i.start),
+            _ => None,
+        }
+    }
+
+    pub fn int_ne(&mut self, other: &NumberIntervals) {
+        self.intervals.clear();
+        if self.is_disjoint(other) {
+            self.intervals.push(Number::ONE.into());
+        } else {
+            self.intervals.push(Number::ZERO.into());
+            match (self.is_constant(), other.is_constant()) {
+                (Some(l), Some(r)) if l == r => (),
+                _ => {
+                    self.intervals.push(Number::ONE.into());
+                },
+            }
+        }
+    }
+
+    pub fn int_eq(&mut self, other: &NumberIntervals) {
+        self.int_ne(other);
+        !self;
+    }
+
+    pub fn int_le(&mut self, other: &NumberIntervals) {
+        let mut le = false;
+        let mut gt = false;
+        for lhs in self.intervals.drain(..) {
+            for &rhs in other.intervals.iter() {
+                le |= lhs.start <= rhs.end;
+                gt |= lhs.end > rhs.start;
+            }
+        }
+        if le {
+            self.intervals.push(Number::ONE.into());
+        }
+        if gt {
+            self.intervals.push(Number::ZERO.into());
+        }
+    }
+
+    pub fn int_lt(&mut self, other: &NumberIntervals) {
+        let mut le = false;
+        let mut gt = false;
+        for lhs in self.intervals.drain(..) {
+            for &rhs in other.intervals.iter() {
+                le |= lhs.start <= rhs.end;
+                gt |= lhs.end > rhs.start;
+            }
+        }
+        if le {
+            self.intervals.push(Number::ONE.into());
+        }
+        if gt {
+            self.intervals.push(Number::ZERO.into());
+        }
+    }
+
+    pub fn int_ge(&mut self, other: &NumberIntervals) {
+        self.int_lt(other);
+        !self;
+    }
+
+    pub fn int_gt(&mut self, other: &NumberIntervals) {
+        self.int_le(other);
+        !self;
     }
 }
 
@@ -1009,6 +1205,122 @@ impl Rem<Number> for NumberIntervals {
 
     fn rem(mut self, rhs: Number) -> Self::Output {
         self %= rhs;
+        self
+    }
+}
+
+impl Not for &mut NumberIntervals {
+    type Output = ();
+
+    fn not(self) -> Self::Output {
+        let mut old_intervals = Vec::with_capacity(2 * self.intervals.len());
+        std::mem::swap(&mut old_intervals, &mut self.intervals);
+
+        for l in old_intervals.into_iter() {
+            let (i0, i1) = !l;
+            self.intervals.push(i0);
+            self.intervals.extend(i1);
+        }
+
+        self.rebuild();
+    }
+}
+
+impl Not for NumberIntervals {
+    type Output = Self;
+
+    fn not(mut self) -> Self::Output {
+        !&mut self;
+        self
+    }
+}
+
+impl BitAndAssign<&NumberIntervals> for NumberIntervals {
+    fn bitand_assign(&mut self, rhs: &NumberIntervals) {
+        let mut maybe_true = false;
+        let mut maybe_false = false;
+
+        for lhs in self.intervals.drain(..) {
+            for &rhs in rhs.intervals.iter() {
+                maybe_false |= lhs.contains(&Number::ZERO) || rhs.contains(&Number::ZERO);
+                maybe_true |= lhs != Number::ZERO.into() && rhs != Number::ZERO.into();
+            }
+        }
+
+        if maybe_true {
+            self.intervals.push(Number::ONE.into());
+        }
+        if maybe_false {
+            self.intervals.push(Number::ZERO.into());
+        }
+    }
+}
+
+impl BitAnd<&NumberIntervals> for NumberIntervals {
+    type Output = Self;
+
+    fn bitand(mut self, rhs: &NumberIntervals) -> Self::Output {
+        self &= rhs;
+        self
+    }
+}
+
+impl BitAndAssign<Number> for NumberIntervals {
+    fn bitand_assign(&mut self, rhs: Number) {
+        *self &= &rhs.into();
+    }
+}
+
+impl BitAnd<Number> for NumberIntervals {
+    type Output = Self;
+
+    fn bitand(mut self, rhs: Number) -> Self::Output {
+        self &= rhs;
+        self
+    }
+}
+
+impl BitOrAssign<&NumberIntervals> for NumberIntervals {
+    fn bitor_assign(&mut self, rhs: &NumberIntervals) {
+        let mut maybe_true = false;
+        let mut maybe_false = false;
+
+        for lhs in self.intervals.drain(..) {
+            for &rhs in rhs.intervals.iter() {
+                maybe_false |= lhs.contains(&Number::ZERO) && rhs.contains(&Number::ZERO);
+                maybe_true |= lhs != Number::ZERO.into() || rhs != Number::ZERO.into();
+            }
+        }
+
+        if maybe_true {
+            self.intervals.push(Number::ONE.into());
+        }
+        if maybe_false {
+            self.intervals.push(Number::ZERO.into());
+        }
+    }
+}
+
+impl BitOr<&NumberIntervals> for NumberIntervals {
+    type Output = Self;
+
+    fn bitor(mut self, rhs: &NumberIntervals) -> Self::Output {
+        self |= rhs;
+        self
+    }
+}
+
+impl BitOrAssign<Number> for NumberIntervals {
+    fn bitor_assign(&mut self, rhs: Number) {
+        *self |= &rhs.into();
+    }
+}
+
+impl BitOr<Number> for NumberIntervals {
+    type Output = Self;
+
+    fn bitor(mut self, rhs: Number) -> Self::Output {
+        self |= rhs;
         self
     }
 }
