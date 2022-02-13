@@ -824,7 +824,7 @@ impl NumberIntervals {
     }
 
     pub fn intersect(&self, other: &NumberIntervals) -> Self {
-        let mut intervals = Vec::with_capacity(self.as_ref().len() * other.as_ref().len());
+        let mut intervals = Vec::with_capacity(self.as_ref().len().max(other.as_ref().len()));
         for (&lhs, &rhs) in self.intervals.iter().cartesian_product(other.intervals.iter()) {
             let interval = Interval {
                 start: lhs.start.max(rhs.start),
@@ -840,6 +840,18 @@ impl NumberIntervals {
         }
     }
 
+    pub fn union(&self, other: &NumberIntervals) -> Self {
+        let mut intervals = Vec::with_capacity(self.as_ref().len() + other.as_ref().len());
+        intervals.extend(self.intervals.iter().copied());
+        intervals.extend(other.intervals.iter().copied());
+        let mut intervals = NumberIntervals {
+            intervals,
+            runtime_error: false,
+        };
+        intervals.rebuild();
+        intervals
+    }
+
     pub fn is_disjoint(&self, other: &NumberIntervals) -> bool {
         self.intersect(other).as_ref().is_empty()
     }
@@ -851,68 +863,76 @@ impl NumberIntervals {
         }
     }
 
-    pub fn int_ne(&mut self, other: &NumberIntervals) {
-        self.intervals.clear();
+    #[must_use]
+    pub fn int_ne(&self, other: &NumberIntervals) -> NumberIntervals {
+        let mut possibilities = NumberIntervals::nothing();
         if self.is_disjoint(other) {
-            self.intervals.push(Number::ONE.into());
+            possibilities.intervals.push(Number::ONE.into());
         } else {
-            self.intervals.push(Number::ZERO.into());
+            possibilities.intervals.push(Number::ZERO.into());
             match (self.is_constant(), other.is_constant()) {
                 (Some(l), Some(r)) if l == r => (),
                 _ => {
-                    self.intervals.push(Number::ONE.into());
+                    possibilities.intervals.push(Number::ONE.into());
                 },
             }
         }
+        possibilities
     }
 
-    pub fn int_eq(&mut self, other: &NumberIntervals) {
-        self.int_ne(other);
-        !self;
+    #[must_use]
+    pub fn int_eq(&self, other: &NumberIntervals) -> NumberIntervals {
+        !self.int_ne(other)
     }
 
-    pub fn int_le(&mut self, other: &NumberIntervals) {
+    #[must_use]
+    pub fn int_le(&self, other: &NumberIntervals) -> NumberIntervals {
         let mut le = false;
         let mut gt = false;
-        for lhs in self.intervals.drain(..) {
-            for &rhs in other.intervals.iter() {
+        for lhs in self.intervals.iter() {
+            for rhs in other.intervals.iter() {
                 le |= lhs.start <= rhs.end;
                 gt |= lhs.end > rhs.start;
             }
         }
+        let mut possibilities = NumberIntervals::nothing();
         if le {
-            self.intervals.push(Number::ONE.into());
+            possibilities.intervals.push(Number::ONE.into());
         }
         if gt {
-            self.intervals.push(Number::ZERO.into());
+            possibilities.intervals.push(Number::ZERO.into());
         }
+        possibilities
     }
 
-    pub fn int_lt(&mut self, other: &NumberIntervals) {
+    #[must_use]
+    pub fn int_lt(&self, other: &NumberIntervals) -> NumberIntervals {
         let mut le = false;
         let mut gt = false;
-        for lhs in self.intervals.drain(..) {
-            for &rhs in other.intervals.iter() {
+        for lhs in self.intervals.iter() {
+            for rhs in other.intervals.iter() {
                 le |= lhs.start <= rhs.end;
                 gt |= lhs.end > rhs.start;
             }
         }
+        let mut possibilities = NumberIntervals::nothing();
         if le {
-            self.intervals.push(Number::ONE.into());
+            possibilities.intervals.push(Number::ONE.into());
         }
         if gt {
-            self.intervals.push(Number::ZERO.into());
+            possibilities.intervals.push(Number::ZERO.into());
         }
+        possibilities
     }
 
-    pub fn int_ge(&mut self, other: &NumberIntervals) {
-        self.int_lt(other);
-        !self;
+    #[must_use]
+    pub fn int_ge(&self, other: &NumberIntervals) -> NumberIntervals {
+        !self.int_lt(other)
     }
 
-    pub fn int_gt(&mut self, other: &NumberIntervals) {
-        self.int_le(other);
-        !self;
+    #[must_use]
+    pub fn int_gt(&self, other: &NumberIntervals) -> NumberIntervals {
+        !self.int_le(other)
     }
 }
 
