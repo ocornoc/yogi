@@ -823,6 +823,13 @@ impl NumberIntervals {
         self.intervals.push(Interval::from(..));
     }
 
+    pub fn pow_assign(&mut self, _other: &NumberIntervals) {
+        // TODO: Placeholder
+        self.intervals.clear();
+        self.intervals.push(Interval::from(..));
+    }
+
+    #[must_use]
     pub fn intersect(&self, other: &NumberIntervals) -> Self {
         let mut intervals = Vec::with_capacity(self.as_ref().len().max(other.as_ref().len()));
         for (&lhs, &rhs) in self.intervals.iter().cartesian_product(other.intervals.iter()) {
