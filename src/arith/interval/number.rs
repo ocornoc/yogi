@@ -648,33 +648,11 @@ impl Rem for Interval {
     }
 }
 
-impl Not for Interval {
-    type Output = (Self, Option<Self>);
-
-    fn not(self) -> Self::Output {
-        let one = if self.contains(&Number::ZERO) {
-            Some(Number::ONE.into())
-        } else {
-            None
-        };
-        let zero = if self != Number::ZERO.into() {
-            Some(Number::ZERO.into())
-        } else {
-            None
-        };
-        match (zero, one) {
-            (None, None) => unreachable!(),
-            (Some(i), None) | (None, Some(i)) => (i, None),
-            (Some(i), i2@Some(_)) => (i, i2),
-        }
-    }
-}
-
 #[derive(Debug, Clone, AsRef, Eq, Serialize, Deserialize)]
 pub struct NumberIntervals {
     #[as_ref]
-    intervals: Vec<Interval>,
-    runtime_error: bool,
+    pub(super) intervals: Vec<Interval>,
+    pub(super) runtime_error: bool,
 }
 
 impl NumberIntervals {
@@ -847,6 +825,7 @@ impl NumberIntervals {
         }
     }
 
+    #[must_use]
     pub fn union(&self, other: &NumberIntervals) -> Self {
         let mut intervals = Vec::with_capacity(self.as_ref().len() + other.as_ref().len());
         intervals.extend(self.intervals.iter().copied());
@@ -941,11 +920,59 @@ impl NumberIntervals {
     pub fn int_gt(&self, other: &NumberIntervals) -> NumberIntervals {
         !self.int_le(other)
     }
+
+    #[must_use]
+    pub fn stringify(&self) -> Option<StringInterval> {
+        if self.intervals.is_empty() {
+            return None;
+        }
+
+        let start = 0;  // placeholder
+        let end = Number::MIN.to_string().len() as u16;  // placeholder
+
+        Some(StringInterval {
+            length: LengthInterval {
+                start,
+                end,
+            },
+            runtime_error: false,
+        })
+    }
+
+    #[must_use]
+    pub fn as_bool(&self) -> BoolInterval {
+        let mut boolify = BoolInterval::nothing();
+        if self.contains(Number::ZERO) {
+            boolify.bfalse = true;
+        }
+        if !self.intervals.is_empty() && *self != Number::ZERO.into() {
+            boolify.btrue = true;
+        }
+        boolify
+    }
+
+    pub fn set_to_bool(&mut self, bools: BoolInterval) {
+        self.intervals.clear();
+        if bools.bfalse {
+            self.intervals.push(Number::ZERO.into());
+        }
+        if bools.btrue {
+            self.intervals.push(Number::ONE.into());
+        }
+    }
 }
 
 impl PartialEq for NumberIntervals {
     fn eq(&self, other: &Self) -> bool {
         self.intervals == other.intervals
+    }
+}
+
+impl From<BoolInterval> for NumberIntervals {
+    fn from(bools: BoolInterval) -> Self {
+        let mut intervals = NumberIntervals::nothing();
+        intervals.set_to_bool(bools);
+        intervals
     }
 }
 
@@ -1240,115 +1267,75 @@ impl Not for &mut NumberIntervals {
     type Output = ();
 
     fn not(self) -> Self::Output {
-        let mut old_intervals = Vec::with_capacity(2 * self.intervals.len());
-        std::mem::swap(&mut old_intervals, &mut self.intervals);
-
-        for l in old_intervals.into_iter() {
-            let (i0, i1) = !l;
-            self.intervals.push(i0);
-            self.intervals.extend(i1);
-        }
-
-        self.rebuild();
+        self.set_to_bool(!self.as_bool());
     }
 }
 
 impl Not for NumberIntervals {
     type Output = Self;
 
-    fn not(mut self) -> Self::Output {
-        !&mut self;
-        self
+    fn not(self) -> Self::Output {
+        (!self.as_bool()).into()
     }
 }
 
 impl BitAndAssign<&NumberIntervals> for NumberIntervals {
     fn bitand_assign(&mut self, rhs: &NumberIntervals) {
-        let mut maybe_true = false;
-        let mut maybe_false = false;
-
-        for lhs in self.intervals.drain(..) {
-            for &rhs in rhs.intervals.iter() {
-                maybe_false |= lhs.contains(&Number::ZERO) || rhs.contains(&Number::ZERO);
-                maybe_true |= lhs != Number::ZERO.into() && rhs != Number::ZERO.into();
-            }
-        }
-
-        if maybe_true {
-            self.intervals.push(Number::ONE.into());
-        }
-        if maybe_false {
-            self.intervals.push(Number::ZERO.into());
-        }
+        let bools = self.as_bool() & rhs.as_bool();
+        self.set_to_bool(bools);
     }
 }
 
 impl BitAnd<&NumberIntervals> for NumberIntervals {
     type Output = Self;
 
-    fn bitand(mut self, rhs: &NumberIntervals) -> Self::Output {
-        self &= rhs;
-        self
+    fn bitand(self, rhs: &NumberIntervals) -> Self::Output {
+        (self.as_bool() & rhs.as_bool()).into()
     }
 }
 
 impl BitAndAssign<Number> for NumberIntervals {
     fn bitand_assign(&mut self, rhs: Number) {
-        *self &= &rhs.into();
+        let bools = self.as_bool() & rhs.into();
+        self.set_to_bool(bools);
     }
 }
 
 impl BitAnd<Number> for NumberIntervals {
     type Output = Self;
 
-    fn bitand(mut self, rhs: Number) -> Self::Output {
-        self &= rhs;
-        self
+    fn bitand(self, rhs: Number) -> Self::Output {
+        (self.as_bool() & rhs.into()).into()
     }
 }
 
 impl BitOrAssign<&NumberIntervals> for NumberIntervals {
     fn bitor_assign(&mut self, rhs: &NumberIntervals) {
-        let mut maybe_true = false;
-        let mut maybe_false = false;
-
-        for lhs in self.intervals.drain(..) {
-            for &rhs in rhs.intervals.iter() {
-                maybe_false |= lhs.contains(&Number::ZERO) && rhs.contains(&Number::ZERO);
-                maybe_true |= lhs != Number::ZERO.into() || rhs != Number::ZERO.into();
-            }
-        }
-
-        if maybe_true {
-            self.intervals.push(Number::ONE.into());
-        }
-        if maybe_false {
-            self.intervals.push(Number::ZERO.into());
-        }
+        let bools = self.as_bool() | rhs.as_bool();
+        self.set_to_bool(bools);
     }
 }
 
 impl BitOr<&NumberIntervals> for NumberIntervals {
     type Output = Self;
 
-    fn bitor(mut self, rhs: &NumberIntervals) -> Self::Output {
-        self |= rhs;
-        self
+    fn bitor(self, rhs: &NumberIntervals) -> Self::Output {
+        (self.as_bool() | rhs.as_bool()).into()
     }
 }
 
 impl BitOrAssign<Number> for NumberIntervals {
     fn bitor_assign(&mut self, rhs: Number) {
-        *self |= &rhs.into();
+        let bools = self.as_bool() | rhs.into();
+        self.set_to_bool(bools);
     }
 }
 
 impl BitOr<Number> for NumberIntervals {
     type Output = Self;
 
-    fn bitor(mut self, rhs: Number) -> Self::Output {
-        self |= rhs;
-        self
+    fn bitor(self, rhs: Number) -> Self::Output {
+        (self.as_bool() | rhs.into()).into()
     }
 }
 
