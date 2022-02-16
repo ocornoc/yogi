@@ -1,6 +1,8 @@
 use super::*;
 
-#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Default, Arbitrary)]
+#[derive(
+    Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Default, Arbitrary, Serialize, Deserialize,
+)]
 pub struct Number(pub i64);
 
 impl Number {

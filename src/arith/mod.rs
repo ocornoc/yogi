@@ -5,6 +5,7 @@ use arbitrary::Arbitrary;
 use thiserror::Error;
 use derive_more::AsRef;
 use rand::{prelude::*, distributions::{*, uniform::*}};
+use serde::{Serialize, Deserialize};
 
 pub mod number;
 pub mod ystring;

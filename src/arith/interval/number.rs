@@ -2,7 +2,7 @@ use itertools::Itertools;
 use arrayvec::ArrayVec;
 use super::*;
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Serialize, Deserialize)]
 pub struct Interval {
     pub start: Number,
     pub end: Number,
@@ -670,7 +670,7 @@ impl Not for Interval {
     }
 }
 
-#[derive(Debug, Clone, AsRef, Eq)]
+#[derive(Debug, Clone, AsRef, Eq, Serialize, Deserialize)]
 pub struct NumberIntervals {
     #[as_ref]
     intervals: Vec<Interval>,
