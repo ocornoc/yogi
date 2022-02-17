@@ -1,47 +1,27 @@
 use std::convert::TryInto;
 use arrayvec::ArrayVec;
-use derive_more::{From, Into};
+use derive_more::{From, Into, Display};
 use super::*;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, From, Into)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, From, Into, Display)]
 #[repr(align(8))]
+#[display(fmt = "number #{_0}")]
 pub(super) struct NumReg(pub usize);
 
-impl Display for NumReg {
-    fn fmt(&self, f: &mut Formatter) -> FmtResult {
-        write!(f, "number #{}", self.0)
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, From, Into)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, From, Into, Display)]
 #[repr(align(8))]
+#[display(fmt = "string #{_0}")]
 pub(super) struct StrReg(pub usize);
 
-impl Display for StrReg {
-    fn fmt(&self, f: &mut Formatter) -> FmtResult {
-        write!(f, "string #{}", self.0)
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, From, Into)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, From, Into, Display)]
 #[repr(align(8))]
+#[display(fmt = "value #{_0}")]
 pub(super) struct ValReg(pub usize);
 
-impl Display for ValReg {
-    fn fmt(&self, f: &mut Formatter) -> FmtResult {
-        write!(f, "value #{}", self.0)
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, From, Into)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, From, Into, Display)]
 #[repr(align(8))]
+#[display(fmt = "section #{_0}")]
 pub(super) struct Section(pub usize);
-
-impl Display for Section {
-    fn fmt(&self, f: &mut Formatter) -> FmtResult {
-        write!(f, "section #{}", self.0)
-    }
-}
 
 #[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
