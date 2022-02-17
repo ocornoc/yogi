@@ -1,5 +1,27 @@
 use super::*;
 
+macro_rules! num_binop_assign {
+    ($trait:tt, $fn:ident, $traitassign:tt, $fn_assign:ident) => {
+        impl $traitassign<&ValueInterval> for ValueInterval {
+            fn $fn_assign(&mut self, rhs: &Self) {
+                let type_error = self.can_be_string() || rhs.can_be_string();
+                self.strings = None;
+                self.numbers.$fn_assign(&rhs.numbers);
+                self.numbers.runtime_error |= type_error;
+            }
+        }
+
+        impl $trait<&ValueInterval> for ValueInterval {
+            type Output = Self;
+
+            fn $fn(mut self, rhs: &Self) -> Self {
+                self.$fn_assign(rhs);
+                self
+            }
+        }
+    };
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, AsRef)]
 pub struct ValueInterval {
     #[as_ref]
@@ -254,59 +276,9 @@ impl Sub<&ValueInterval> for ValueInterval {
     }
 }
 
-impl MulAssign<&ValueInterval> for ValueInterval {
-    fn mul_assign(&mut self, rhs: &ValueInterval) {
-        let type_error = self.can_be_string() || rhs.can_be_string();
-        self.strings = None;
-        self.numbers *= &rhs.numbers;
-        self.numbers.runtime_error |= type_error;
-    }
-}
-
-impl Mul<&ValueInterval> for ValueInterval {
-    type Output = Self;
-
-    fn mul(mut self, rhs: &ValueInterval) -> Self::Output {
-        self *= rhs;
-        self
-    }
-}
-
-impl DivAssign<&ValueInterval> for ValueInterval {
-    fn div_assign(&mut self, rhs: &ValueInterval) {
-        let type_error = self.can_be_string() || rhs.can_be_string();
-        self.strings = None;
-        self.numbers /= &rhs.numbers;
-        self.numbers.runtime_error |= type_error;
-    }
-}
-
-impl Div<&ValueInterval> for ValueInterval {
-    type Output = Self;
-
-    fn div(mut self, rhs: &ValueInterval) -> Self::Output {
-        self /= rhs;
-        self
-    }
-}
-
-impl RemAssign<&ValueInterval> for ValueInterval {
-    fn rem_assign(&mut self, rhs: &ValueInterval) {
-        let type_error = self.can_be_string() || rhs.can_be_string();
-        self.strings = None;
-        self.numbers %= &rhs.numbers;
-        self.numbers.runtime_error |= type_error;
-    }
-}
-
-impl Rem<&ValueInterval> for ValueInterval {
-    type Output = Self;
-
-    fn rem(mut self, rhs: &ValueInterval) -> Self::Output {
-        self %= rhs;
-        self
-    }
-}
+num_binop_assign!(Mul, mul, MulAssign, mul_assign);
+num_binop_assign!(Div, div, DivAssign, div_assign);
+num_binop_assign!(Rem, rem, RemAssign, rem_assign);
 
 impl Neg for &mut ValueInterval {
     type Output = ();
