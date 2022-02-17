@@ -22,6 +22,17 @@ macro_rules! num_binop_assign {
     };
 }
 
+macro_rules! num_unop {
+    ($fn:ident) => {
+        pub fn $fn(&mut self) {
+            let type_error = self.can_be_string();
+            self.strings = None;
+            self.numbers.$fn();
+            self.numbers.runtime_error |= type_error;
+        }
+    };
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, AsRef)]
 pub struct ValueInterval {
     #[as_ref]
@@ -101,6 +112,37 @@ impl ValueInterval {
     fn try_stringify_binop(&self, other: &Self) -> Option<(StringInterval, StringInterval)> {
         Some((self.stringify()?, other.stringify()?))
     }
+
+    pub fn pow_assign(&mut self, rhs: &Self) {
+        let type_error = self.can_be_string() || rhs.can_be_string();
+        self.strings = None;
+        self.numbers.pow_assign(&rhs.numbers);
+        self.numbers.runtime_error |= type_error;
+    }
+
+    pub fn pre_inc(&mut self) {
+        self.numbers.pre_inc();
+        if let Some(ref mut strings) = self.strings {
+            strings.pre_inc();
+        }
+    }
+
+    pub fn pre_dec(&mut self) {
+        self.numbers.pre_dec();
+        if let Some(ref mut strings) = self.strings {
+            strings.pre_dec();
+        }
+    }
+
+    num_unop!(abs);
+    num_unop!(fact);
+    num_unop!(sqrt);
+    num_unop!(sin);
+    num_unop!(cos);
+    num_unop!(tan);
+    num_unop!(asin);
+    num_unop!(acos);
+    num_unop!(atan);
 
     pub fn int_eq(&self, other: &Self) -> NumberIntervals {
         !self.int_ne(other)
