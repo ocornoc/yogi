@@ -23,8 +23,7 @@ pub(super) struct ValReg(pub usize);
 #[display(fmt = "section #{_0}")]
 pub(super) struct Section(pub usize);
 
-#[allow(dead_code)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub(super) enum Instruction {
     JumpSectionIf(Section, NumReg),
     JumpIfError(Section),
