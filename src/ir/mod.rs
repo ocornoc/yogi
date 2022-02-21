@@ -2,7 +2,7 @@ use std::ops::{Deref, DerefMut};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::io::Write;
 use std::fmt::{Formatter, Display, Result as FmtResult};
-use derive_more::{Index, IndexMut, From, Display};
+use derive_more::From;
 use atomic_refcell::AtomicRefCell;
 use ahash::AHashMap;
 use arith::*;
