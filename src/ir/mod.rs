@@ -606,6 +606,32 @@ fn remove_valreg(regs: &mut Values, sections: &mut Sections, reg: ValReg) {
     }
 }
 
+fn remove_section(lines: &mut Lines, sections: &mut Sections, section: Section) -> SectionCode {
+    for line in lines {
+        assert_ne!(*line, section, "Tried to remove line-start section");
+        if *line > section {
+            line.0 -= 1;
+        }
+    }
+
+    let original = sections.remove(section.0);
+
+    for s in sections {
+        for instr in s.instrs.iter_mut() {
+            instr.remove_section(section);
+        }
+
+        if let SectionOrLine::Section(ref mut s) = s.success {
+            debug_assert_ne!(*s, section, "Tried to remove existing section");
+            if *s > section {
+                s.0 -= 1;
+            }
+        }
+    }
+
+    original
+}
+
 #[cfg(test)]
 mod tests {
     use crate::simple_interp::SimpleInterp;
