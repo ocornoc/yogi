@@ -514,6 +514,10 @@ impl IRMachine {
     pub fn set_next_line(&mut self, line: usize) {
         self.current_sect = self.lines[line];
     }
+
+    pub fn optimize(&mut self) {
+
+    }
 }
 
 impl Clone for IRMachine {
@@ -648,17 +652,28 @@ mod tests {
             },
             program,
         );
+        let mut optimized_ir_machine = ir_machine.clone();
+        optimized_ir_machine.optimize();
         simple_interp.step_lines(steps);
         ir_machine.step_repeat(steps);
+        optimized_ir_machine.step_repeat(steps);
         let values = simple_interp.values();
         assert_eq!(
             values[&Ident::global("output")],
             ir_machine.get_ident_value(&Ident::global("output")),
         );
+        assert_eq!(
+            values[&Ident::global("output")],
+            optimized_ir_machine.get_ident_value(&Ident::global("output")),
+        );
         for (ident, value) in values {
             assert_eq!(
                 *value,
                 ir_machine.get_ident_value(ident),
+            );
+            assert_eq!(
+                *value,
+                optimized_ir_machine.get_ident_value(ident),
             );
         }
     }
