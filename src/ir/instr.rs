@@ -170,31 +170,29 @@ impl Instruction {
     }
 
     pub fn remove_reg(&mut self, reg: AnyReg) {
+        let self_copy = self.clone();
         match reg {
             AnyReg::Num(n) => {
                 for r in self.get_mut_num_regs() {
-                    if r.0 > n.0 {
+                    debug_assert_ne!(*r, n, "Tried to delete existing reg in {self_copy}");
+                    if *r > n {
                         r.0 -= 1;
-                    } else if *r == n {
-                        panic!("Tried to get rid of reg {}", n);
                     }
                 }
             },
             AnyReg::Str(s) => {
                 for r in self.get_mut_str_regs() {
-                    if r.0 > s.0 {
+                    debug_assert_ne!(*r, s, "Tried to delete existing reg in {self_copy}");
+                    if *r > s {
                         r.0 -= 1;
-                    } else if *r == s {
-                        panic!("Tried to get rid of reg {}", s);
                     }
                 }
             },
             AnyReg::Val(v) => {
                 for r in self.get_mut_val_regs() {
+                    debug_assert_ne!(*r, v, "Tried to delete existing reg in {self_copy}");
                     if r.0 > v.0 {
                         r.0 -= 1;
-                    } else if *r == v {
-                        panic!("Tried to get rid of reg {}", v);
                     }
                 }
             },
@@ -203,10 +201,9 @@ impl Instruction {
 
     pub fn remove_section(&mut self, section: Section) {
         if let Instruction::JumpSectionIf(s, _) | Instruction::JumpIfError(s) = self {
+            debug_assert_ne!(s.clone(), section, "Tried to delete existing section in {self}");
             if s.0 > section.0 {
                 s.0 -= 1;
-            } else if *s == section {
-                panic!("Tried to get rid of section {}", s);
             }
         }
     }
