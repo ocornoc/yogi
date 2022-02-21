@@ -8,15 +8,70 @@ use super::*;
 #[display(fmt = "number #{_0}")]
 pub(super) struct NumReg(pub usize);
 
+impl PartialEq<AnyReg> for NumReg {
+    fn eq(&self, other: &AnyReg) -> bool {
+        other == self
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, From, Into, Display)]
 #[repr(align(8))]
 #[display(fmt = "string #{_0}")]
 pub(super) struct StrReg(pub usize);
 
+impl PartialEq<AnyReg> for StrReg {
+    fn eq(&self, other: &AnyReg) -> bool {
+        other == self
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, From, Into, Display)]
 #[repr(align(8))]
 #[display(fmt = "value #{_0}")]
 pub(super) struct ValReg(pub usize);
+
+impl PartialEq<AnyReg> for ValReg {
+    fn eq(&self, other: &AnyReg) -> bool {
+        other == self
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, From, Display)]
+pub(super) enum AnyReg {
+    Num(NumReg),
+    Str(StrReg),
+    Val(ValReg),
+}
+
+impl PartialEq<NumReg> for AnyReg {
+    fn eq(&self, other: &NumReg) -> bool {
+        if let AnyReg::Num(r) = self {
+            r == other
+        } else {
+            false
+        }
+    }
+}
+
+impl PartialEq<StrReg> for AnyReg {
+    fn eq(&self, other: &StrReg) -> bool {
+        if let AnyReg::Str(r) = self {
+            r == other
+        } else {
+            false
+        }
+    }
+}
+
+impl PartialEq<ValReg> for AnyReg {
+    fn eq(&self, other: &ValReg) -> bool {
+        if let AnyReg::Val(r) = self {
+            r == other
+        } else {
+            false
+        }
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, From, Into, Display)]
 #[repr(align(8))]

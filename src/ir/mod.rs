@@ -16,13 +16,6 @@ mod codegen;
 
 const SUCCESS_NEEDS_FIXING: SectionOrLine = SectionOrLine::Section(Section(!0));
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, From, Display)]
-enum AnyReg {
-    Num(NumReg),
-    Str(StrReg),
-    Val(ValReg),
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, From)]
 enum SectionOrLine {
     Section(Section),
