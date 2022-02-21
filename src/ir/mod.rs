@@ -45,18 +45,24 @@ pub struct SectionCode {
     success: SectionOrLine,
 }
 
-#[derive(Debug, Index, IndexMut)]
+type Sections = Vec<SectionCode>;
+type Lines = Vec<Section>;
+type CurrentSect = Section;
+type Numbers = Vec<AtomicRefCell<Number>>;
+type Strings = Vec<AtomicRefCell<YString>>;
+type Values = Vec<AtomicRefCell<Value>>;
+type Idents = AHashMap<Ident, AnyReg>;
+
+#[derive(Debug)]
 pub struct IRMachine {
-    #[index]
-    #[index_mut]
-    sections: Vec<SectionCode>,
-    lines: Vec<Section>,
-    current_sect: Section,
+    sections: Sections,
+    lines: Lines,
+    current_sect: CurrentSect,
     runtime_err: AtomicBool,
-    numbers: Vec<AtomicRefCell<Number>>,
-    strings: Vec<AtomicRefCell<YString>>,
-    values: Vec<AtomicRefCell<Value>>,
-    idents: AHashMap<Ident, AnyReg>,
+    numbers: Numbers,
+    strings: Strings,
+    values: Values,
+    idents: Idents,
 }
 
 macro_rules! reg_fns {
