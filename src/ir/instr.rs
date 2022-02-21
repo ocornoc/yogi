@@ -257,10 +257,21 @@ impl Instruction {
     pub fn remove_section(&mut self, section: Section) {
         if let Instruction::JumpSectionIf(s, _) | Instruction::JumpIfError(s) = self {
             debug_assert_ne!(s.clone(), section, "Tried to delete existing section in {self}");
-            if s.0 > section.0 {
+            if *s > section {
                 s.0 -= 1;
             }
         }
+    }
+
+    pub fn checked_remove_section(&mut self, section: Section) -> bool {
+        if let Instruction::JumpSectionIf(s, _) | Instruction::JumpIfError(s) = self {
+            if *s > section {
+                s.0 -= 1;
+            } else if *s == section {
+                return true;
+            }
+        }
+        false
     }
 
     pub const fn can_runtime_err(self) -> bool {
