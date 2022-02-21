@@ -78,12 +78,12 @@ fn remove_section(lines: &mut Lines, sections: &mut Sections, section: Section) 
 
     let original = sections.remove(section.0);
 
-    for s in sections {
-        for instr in s.instrs.iter_mut() {
+    for code in sections {
+        for instr in code.instrs.iter_mut() {
             instr.remove_section(section);
         }
 
-        if let SectionOrLine::Section(ref mut s) = s.success {
+        if let SectionOrLine::Section(ref mut s) = code.success {
             debug_assert_ne!(*s, section, "Tried to remove existing section");
             if *s > section {
                 s.0 -= 1;
