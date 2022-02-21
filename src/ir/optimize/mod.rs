@@ -93,3 +93,21 @@ fn remove_section(lines: &mut Lines, sections: &mut Sections, section: Section) 
 
     original
 }
+
+fn fixup_removed_section(section: Section, code: &mut SectionCode) -> bool {
+    for instr in code.instrs.iter_mut() {
+        if instr.checked_remove_section(section) {
+            return false;
+        }
+    }
+
+    if let SectionOrLine::Section(ref mut s) = code.success {
+        if *s > section {
+            s.0 -= 1;
+        } else if *s == section {
+            return false;
+        }
+    }
+
+    true
+}
