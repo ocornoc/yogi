@@ -23,48 +23,36 @@ fn set_core_affinity() {
     );
 }
 
-fn fs_main() {
-    const NUM_LINES: usize = 100_000;
+fn main() {
+    const NUM_LINES: usize = 500_000;
     set_core_affinity();
     let script = script();
     let mut vm = ir::IRMachine::from_ast(Default::default(), script);
-    for _ in 0..NUM_LINES {
-        vm.step();
-    }
-}
-
-fn main() {
-    if firestorm::enabled() {
-        firestorm::bench("./flames/", fs_main).unwrap();
-    } else {
-        const NUM_LINES: usize = 500_000;
-        set_core_affinity();
-        let script = script();
-        let mut vm = ir::IRMachine::from_ast(Default::default(), script);
+    {
+        vm.print_bytecode(std::fs::File::create("unoptimized.yogir").unwrap()).unwrap();
         vm.optimize();
-        vm.set_ident(&Ident::global("s"), Value::Str("Hello Cylon".to_string().into()));
-        vm.set_ident(&Ident::global("i"), Value::Num(6.into()));
-        loop {
-            let start = Instant::now();
-            for _ in 0..NUM_LINES {
-                vm.step();
-            }
-            let done = Instant::now();
-            let dur = done - start;
-            let time_taken = dur.as_secs_f32();
-            let lines_per_sec = NUM_LINES as f32 / time_taken;
-            let ns_per_line = dur.as_nanos() as f32 / NUM_LINES as f32;
-            println!(
-                "finished execution of {} lines in {}s at a rate of {} lines/sec ({} ns/line).",
-                NUM_LINES,
-                time_taken,
-                lines_per_sec,
-                ns_per_line,
-            );
-            println!("idents as of right now");
-            for (ident, val) in vm.idents() {
-                println!("{}: {}", ident, val);
-            }
+        vm.print_bytecode(std::fs::File::create("optimized.yogir").unwrap()).unwrap();
+    }
+    vm.set_ident(&Ident::global("s"), Value::Str("Hello Cylon".to_string().into()));
+    vm.set_ident(&Ident::global("i"), Value::Num(6.into()));
+    loop {
+        let start = Instant::now();
+        vm.step_repeat(NUM_LINES);
+        let done = Instant::now();
+        let dur = done - start;
+        let time_taken = dur.as_secs_f32();
+        let lines_per_sec = NUM_LINES as f32 / time_taken;
+        let ns_per_line = dur.as_nanos() as f32 / NUM_LINES as f32;
+        println!(
+            "finished execution of {} lines in {}s at a rate of {} lines/sec ({} ns/line).",
+            NUM_LINES,
+            time_taken,
+            lines_per_sec,
+            ns_per_line,
+        );
+        println!("idents as of right now");
+        for (ident, val) in vm.idents() {
+            println!("{}: {}", ident, val);
         }
     }
 }

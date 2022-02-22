@@ -83,9 +83,11 @@ impl IRMachine {
     reg_fns!(new_str_reg, str_ref, str_mut, StrReg, YString, strings);
     reg_fns!(new_val_reg, val_ref, val_mut, ValReg, Value, values);
 
+    #[profiling::function]
     fn execute_instr(&self, instr: Instruction) -> Option<Section> {
         match instr {
             Instruction::JumpSectionIf(sect, condition) => {
+                profiling::scope!("execute_jump_section_if");
                 debug_assert_ne!(
                     sect,
                     Section(!0),
@@ -100,6 +102,7 @@ impl IRMachine {
                 };
             },
             Instruction::JumpIfError(sect) => {
+                profiling::scope!("execute_jump_if_error");
                 debug_assert_ne!(
                     sect,
                     Section(!0),
@@ -112,19 +115,30 @@ impl IRMachine {
                     return Some(sect);
                 }
             },
-            Instruction::CopyNum(from, to) => if from != to {
-                *self.num_mut(to).unwrap() = *self.num_ref(from).unwrap();
+            Instruction::CopyNum(from, to) => {
+                profiling::scope!("execute_copy_num");
+                if from != to {
+                    *self.num_mut(to).unwrap() = *self.num_ref(from).unwrap();
+                }
             },
-            Instruction::CopyStr(from, to) => if from != to {
-                self.str_mut(to).unwrap().clone_from(&self.str_ref(from).unwrap());
+            Instruction::CopyStr(from, to) => {
+                profiling::scope!("execute_copy_str");
+                if from != to {
+                    self.str_mut(to).unwrap().clone_from(&self.str_ref(from).unwrap());
+                }
             },
-            Instruction::CopyVal(from, to) => if from != to {
-                self.val_mut(to).unwrap().clone_from(&self.val_ref(from).unwrap());
+            Instruction::CopyVal(from, to) => {
+                profiling::scope!("execute_copy_val");
+                if from != to {
+                    self.val_mut(to).unwrap().clone_from(&self.val_ref(from).unwrap());
+                }
             },
             Instruction::ValueifyNum(n, v) => {
+                profiling::scope!("execute_valueify_num");
                 *self.val_mut(v).unwrap() = Value::Num(*self.num_ref(n).unwrap());
             },
             Instruction::ValueifyStr(s, v) => {
+                profiling::scope!("execute_valueify_str");
                 let mut val = self.val_mut(v).unwrap();
                 if let Some(s) = val.as_ystring_mut() {
                     s
@@ -133,18 +147,22 @@ impl IRMachine {
                     val.as_ystring_mut().unwrap()
                 }.clone_from(&self.str_ref(s).unwrap());
             },
-            Instruction::NumberifyVal(v, n) =>
+            Instruction::NumberifyVal(v, n) => {
+                profiling::scope!("execute_numberify_val");
                 if let Some(vn) = self.val_ref(v).unwrap().as_number() {
                     *self.num_mut(n).unwrap() = vn;
                 } else {
                     self.runtime_err.store(true, Ordering::Relaxed);
-                },
+                }
+            }, 
             Instruction::StringifyNum(n, s) => {
+                profiling::scope!("execute_stringify_num");
                 let mut s = self.str_mut(s).unwrap();
                 s.clear();
                 self.num_ref(n).unwrap().stringify_with_buffer(&mut s);
             },
             Instruction::StringifyVal(v, s) => {
+                profiling::scope!("execute_stringify_val");
                 let mut s = self.str_mut(s).unwrap();
                 s.clear();
                 match &*self.val_ref(v).unwrap() {
@@ -157,67 +175,90 @@ impl IRMachine {
                 }
             },
             Instruction::IsTruthyNum(n) => {
+                profiling::scope!("execute_truthy_num");
                 let mut n = self.num_mut(n).unwrap();
                 *n = n.as_bool().into();
             },
             Instruction::IsTruthyVal(v, n) => {
+                profiling::scope!("execute_truthy_val");
                 *self.num_mut(n).unwrap() = self.val_ref(v).unwrap().as_bool().into();
             },
             Instruction::NotNum(n) => {
+                profiling::scope!("execute_not_num");
                 let mut n = self.num_mut(n).unwrap();
                 *n = !*n;
             },
             Instruction::NotVal(v, n) => {
+                profiling::scope!("execute_not_val");
                 *self.num_mut(n).unwrap() = !&*self.val_ref(v).unwrap();
             },
-            Instruction::AddNum(n1, n2) => if n1 == n2 {
-                let mut n = self.num_mut(n1).unwrap();
-                let n2 = n.clone();
-                *n += n2;
-            } else {
-                *self.num_mut(n1).unwrap() += *self.num_ref(n2).unwrap();
-            },
-            Instruction::AddStr(s1, s2) => if s1 == s2 {
-                self.str_mut(s1).unwrap().duplicate();
-            } else {
-                *self.str_mut(s1).unwrap() += &self.str_ref(s2).unwrap();
-            },
-            Instruction::AddVal(v1, v2) => if v1 == v2 {
-                match *self.val_mut(v1).unwrap() {
-                    Value::Num(ref mut n) => {
-                        let n2 = n.clone();
-                        *n += n2;
-                    },
-                    Value::Str(ref mut s) => {
-                        s.duplicate();
-                    },
+            Instruction::AddNum(n1, n2) => {
+                profiling::scope!("execute_add_num");
+                if n1 == n2 {
+                    let mut n = self.num_mut(n1).unwrap();
+                    let n2 = n.clone();
+                    *n += n2;
+                } else {
+                    *self.num_mut(n1).unwrap() += *self.num_ref(n2).unwrap();
                 }
-            } else {
-                *self.val_mut(v1).unwrap() += &self.val_ref(v2).unwrap();
             },
-            Instruction::SubNum(n1, n2) => if n1 == n2 {
-                *self.num_mut(n1).unwrap() = Number::ZERO;
-            } else {
-                *self.num_mut(n1).unwrap() -= *self.num_ref(n2).unwrap();
-            },
-            Instruction::SubStr(s1, s2) => if s1 == s2 {
-                self.str_mut(s1).unwrap().clear();
-            } else {
-                *self.str_mut(s1).unwrap() -= &self.str_ref(s2).unwrap();
-            },
-            Instruction::SubVal(v1, v2) => if v1 == v2 {
-                match *self.val_mut(v1).unwrap() {
-                    Value::Num(ref mut n) => {
-                        *n = Number::ZERO;
-                    },
-                    Value::Str(ref mut s) => {
-                        s.clear();
-                    },
+            Instruction::AddStr(s1, s2) => {
+                profiling::scope!("execute_add_str");
+                if s1 == s2 {
+                    self.str_mut(s1).unwrap().duplicate();
+                } else {
+                    *self.str_mut(s1).unwrap() += &self.str_ref(s2).unwrap();
                 }
-            } else {
-                *self.val_mut(v1).unwrap() -= &self.val_ref(v2).unwrap();
+            },
+            Instruction::AddVal(v1, v2) => {
+                profiling::scope!("execute_add_val");
+                if v1 == v2 {
+                    match *self.val_mut(v1).unwrap() {
+                        Value::Num(ref mut n) => {
+                            let n2 = n.clone();
+                            *n += n2;
+                        },
+                        Value::Str(ref mut s) => {
+                            s.duplicate();
+                        },
+                    }
+                } else {
+                    *self.val_mut(v1).unwrap() += &self.val_ref(v2).unwrap();
+                }
+            },
+            Instruction::SubNum(n1, n2) => {
+                profiling::scope!("execute_sub_num");
+                if n1 == n2 {
+                    *self.num_mut(n1).unwrap() = Number::ZERO;
+                } else {
+                    *self.num_mut(n1).unwrap() -= *self.num_ref(n2).unwrap();
+                }
+            },
+            Instruction::SubStr(s1, s2) => {
+                profiling::scope!("execute_sub_str");
+                if s1 == s2 {
+                    self.str_mut(s1).unwrap().clear();
+                } else {
+                    *self.str_mut(s1).unwrap() -= &self.str_ref(s2).unwrap();
+                }
+            },
+            Instruction::SubVal(v1, v2) => {
+                profiling::scope!("execute_sub_val");
+                if v1 == v2 {
+                    match *self.val_mut(v1).unwrap() {
+                        Value::Num(ref mut n) => {
+                            *n = Number::ZERO;
+                        },
+                        Value::Str(ref mut s) => {
+                            s.clear();
+                        },
+                    }
+                } else {
+                    *self.val_mut(v1).unwrap() -= &self.val_ref(v2).unwrap();
+                }
             },
             Instruction::Mul(n1, n2) => {
+                profiling::scope!("execute_mul");
                 let mut n = self.num_mut(n1).unwrap();
                 let n2 = if n1 == n2 {
                     n.clone()
@@ -227,6 +268,7 @@ impl IRMachine {
                 *n *= n2;
             },
             Instruction::Div(n1, n2) => {
+                profiling::scope!("execute_div");
                 let mut n = self.num_mut(n1).unwrap();
                 let n2 = if n1 == n2 {
                     n.clone()
@@ -240,6 +282,7 @@ impl IRMachine {
                 }
             },
             Instruction::Rem(n1, n2) => {
+                profiling::scope!("execute_rem");
                 let mut n = self.num_mut(n1).unwrap();
                 let n2 = if n1 == n2 {
                     n.clone()
@@ -253,6 +296,7 @@ impl IRMachine {
                 }
             },
             Instruction::Pow(n1, n2) => {
+                profiling::scope!("execute_pow");
                 let mut n = self.num_mut(n1).unwrap();
                 let n2 = if n1 == n2 {
                     n.clone()
@@ -262,81 +306,101 @@ impl IRMachine {
                 n.pow_assign(n2);
             },
             Instruction::Eq(l, r, out) => {
+                profiling::scope!("execute_eq_val");
                 let l = &*self.val_ref(l).unwrap();
                 let r = &*self.val_ref(r).unwrap();
                 *self.num_mut(out).unwrap() = (l == r).into();
             },
             Instruction::Le(l, r, out) => {
+                profiling::scope!("execute_le_val");
                 let l = &*self.val_ref(l).unwrap();
                 let r = &*self.val_ref(r).unwrap();
                 *self.num_mut(out).unwrap() = (l <= r).into();
             },
             Instruction::Lt(l, r, out) => {
+                profiling::scope!("execute_lt_val");
                 let l = &*self.val_ref(l).unwrap();
                 let r = &*self.val_ref(r).unwrap();
                 *self.num_mut(out).unwrap() = (l < r).into();
             },
             Instruction::IncNum(n) => {
+                profiling::scope!("execute_inc_num");
                 self.num_mut(n).unwrap().pre_inc();
             },
             Instruction::IncStr(s) => {
+                profiling::scope!("execute_inc_str");
                 self.str_mut(s).unwrap().pre_inc();
             },
             Instruction::IncVal(v) => {
+                profiling::scope!("execute_inc_val");
                 self.val_mut(v).unwrap().pre_inc();
             },
             Instruction::DecNum(n) => {
+                profiling::scope!("execute_dec_num");
                 self.num_mut(n).unwrap().pre_dec();
             },
             Instruction::DecStr(s) => {
+                profiling::scope!("execute_dec_str");
                 let out = self.str_mut(s).unwrap().pre_dec();
                 self.runtime_err.store(out.is_err(), Ordering::Relaxed);
             },
             Instruction::DecVal(v) => {
+                profiling::scope!("execute_dec_val");
                 let out = self.val_mut(v).unwrap().pre_dec();
                 self.runtime_err.store(out.is_err(), Ordering::Relaxed);
             },
             Instruction::Abs(n) => {
+                profiling::scope!("execute_abs");
                 let mut n = self.num_mut(n).unwrap();
                 *n = n.abs();
             },
             Instruction::Fact(n) => {
+                profiling::scope!("execute_fact");
                 let mut n = self.num_mut(n).unwrap();
                 *n = n.fact();
             },
             Instruction::Sqrt(n) => {
+                profiling::scope!("execute_sqrt");
                 let mut n = self.num_mut(n).unwrap();
                 *n = n.sqrt();
             },
             Instruction::Sin(n) => {
+                profiling::scope!("execute_sin");
                 let mut n = self.num_mut(n).unwrap();
                 *n = n.sin();
             },
             Instruction::Cos(n) => {
+                profiling::scope!("execute_cos");
                 let mut n = self.num_mut(n).unwrap();
                 *n = n.cos();
             },
             Instruction::Tan(n) => {
+                profiling::scope!("execute_tan");
                 let mut n = self.num_mut(n).unwrap();
                 *n = n.tan();
             },
             Instruction::Asin(n) => {
+                profiling::scope!("execute_asin");
                 let mut n = self.num_mut(n).unwrap();
                 *n = n.asin();
             },
             Instruction::Acos(n) => {
+                profiling::scope!("execute_acos");
                 let mut n = self.num_mut(n).unwrap();
                 *n = n.acos();
             },
             Instruction::Atan(n) => {
+                profiling::scope!("execute_atan");
                 let mut n = self.num_mut(n).unwrap();
                 *n = n.atan();
             },
             Instruction::Neg(n) => {
+                profiling::scope!("execute_neg");
                 let mut n = self.num_mut(n).unwrap();
                 *n = -*n;
             },
             Instruction::And(n1, n2) => {
+                profiling::scope!("execute_and");
                 let mut n = self.num_mut(n1).unwrap();
                 let n2 = if n1 == n2 {
                     n.clone()
@@ -346,6 +410,7 @@ impl IRMachine {
                 *n = (n.as_bool() && n2.as_bool()).into();
             },
             Instruction::Or(n1, n2) => {
+                profiling::scope!("execute_or");
                 let mut n = self.num_mut(n1).unwrap();
                 let n2 = if n1 == n2 {
                     n.clone()
@@ -358,6 +423,7 @@ impl IRMachine {
         None
     }
 
+    #[profiling::function]
     fn execute_sect<const FIRST: bool>(&mut self) -> bool {
         let sect = &self.sections[self.current_sect.0];
         if !FIRST && sect.line_start {
@@ -396,6 +462,7 @@ impl IRMachine {
         }
     }
 
+    #[profiling::function]
     pub fn step(&mut self) {
         let mut running = true;
         self.execute_sect::<true>();
@@ -409,6 +476,8 @@ impl IRMachine {
                 );
             }
         }
+
+        profiling::finish_frame!();
     }
 
     pub fn step_repeat(&mut self, reps: usize) {
