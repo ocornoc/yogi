@@ -1,7 +1,78 @@
 use super::*;
 
+mod sections;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct OptControlFlow {
+    progress: bool,
+    repeat: bool,
+}
+
+#[allow(dead_code)]
+impl OptControlFlow {
+    const fn progressed(repeat: bool) -> Self {
+        OptControlFlow {
+            progress: true,
+            repeat,
+        }
+    }
+
+    const fn no_progress(repeat: bool) -> Self {
+        OptControlFlow {
+            progress: false,
+            repeat,
+        }
+    }
+
+    const fn repeat(progress: bool) -> Self {
+        OptControlFlow {
+            progress,
+            repeat: true,
+        }
+    }
+
+    const fn no_repeat(progress: bool) -> Self {
+        OptControlFlow {
+            progress,
+            repeat: false,
+        }
+    }
+
+    const fn repeat_if_progress(progress: bool) -> Self {
+        if progress {
+            Self::progressed(true)
+        } else {
+            Self::no_progress(false)
+        }
+    }
+}
+
+trait Optimization {
+    fn initialize(&mut self, vm: &IRMachine) {
+        let _ = vm;
+    }
+
+    fn optimize(&mut self, vm: &mut IRMachine) -> OptControlFlow;
+}
+
 pub(super) fn optimize(vm: &mut IRMachine) {
-    
+    let mut optimizations: Vec<Box<dyn Optimization>> = vec![
+        Box::new(sections::CombineSections),
+    ];
+    let mut progress = true;
+    remove_unfixed_sections(&mut vm.lines, &mut vm.sections);
+    while progress {
+        progress = false;
+        for optimizer in optimizations.iter_mut() {
+            optimizer.initialize(vm);
+            let mut repeat = true;
+            while repeat {
+                let control_flow = optimizer.optimize(vm);
+                repeat = control_flow.repeat;
+                progress |= control_flow.progress;
+            }
+        }
+    }
 }
 
 fn checked_remove_numreg(
@@ -84,8 +155,7 @@ fn remove_section(lines: &mut Lines, sections: &mut Sections, section: Section) 
         }
 
         if let SectionOrLine::Section(ref mut s) = code.success {
-            debug_assert_ne!(*s, section, "Tried to remove existing section");
-            if *s > section {
+            if *s >= section {
                 s.0 -= 1;
             }
         }
@@ -110,4 +180,17 @@ fn fixup_removed_section(section: Section, code: &mut SectionCode) -> bool {
     }
 
     true
+}
+
+fn remove_unfixed_sections(lines: &mut Lines, sections: &mut Sections) {
+    let remove = sections
+        .iter()
+        .enumerate()
+        .filter(|(_, s)| s.success == SUCCESS_NEEDS_FIXING)
+        .map(|(i, _)| Section(i))
+        .rev()
+        .collect::<Vec<_>>();
+    for section in remove {
+        remove_section(lines, sections, section);
+    }
 }
