@@ -449,7 +449,7 @@ impl IRMachine {
         }
     }
 
-    pub fn print_bytecode(&self, sink: &mut impl Write) -> std::io::Result<()> {
+    pub fn print_bytecode(&self, mut sink: impl Write) -> std::io::Result<()> {
         fn print_val(vm: &IRMachine, r: AnyReg) -> String {
             match r {
                 AnyReg::Num(n) => format!("{}", vm.num_ref(n).unwrap().deref()),
@@ -518,6 +518,16 @@ impl IRMachine {
 
     pub fn optimize(&mut self) {
         optimize::optimize(self);
+    }
+}
+
+impl Display for IRMachine {
+    fn fmt(&self, f: &mut Formatter) -> FmtResult {
+        let mut data = String::with_capacity(100_000);
+        unsafe {
+            self.print_bytecode(data.as_mut_vec() ).unwrap()
+        };
+        f.write_str(&data)
     }
 }
 
