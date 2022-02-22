@@ -47,6 +47,7 @@ fn main() {
         set_core_affinity();
         let script = script();
         let mut vm = ir::IRMachine::from_ast(Default::default(), script);
+        vm.optimize();
         loop {
             let start = Instant::now();
             for _ in 0..NUM_LINES {

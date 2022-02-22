@@ -21,6 +21,7 @@ struct VarData {
 #[derive(Debug, Serialize)]
 struct DataResults {
     pub vars: Vec<VarData>,
+    pub setup_s: f32,
     pub elapsed_s: f32,
     pub mean_lps: f32,
     pub stddev_lps: f32,
@@ -28,7 +29,13 @@ struct DataResults {
     pub elapsed_lines: usize,
 }
 
-fn print_results(vm: &IRMachine, elapsed_s: f32, elapsed_lines: usize, samples: Vec<f32>) {
+fn print_results(
+    vm: &IRMachine,
+    setup_s: f32,
+    elapsed_s: f32,
+    elapsed_lines: usize,
+    samples: Vec<f32>,
+) {
     let mean_lps = elapsed_lines as f32 / elapsed_s;
     let mean_spl = mean_lps.recip();
     let top: f32 = samples
@@ -50,6 +57,7 @@ fn print_results(vm: &IRMachine, elapsed_s: f32, elapsed_lines: usize, samples: 
                 },
             })
             .collect(),
+        setup_s,
         elapsed_s,
         mean_lps,
         stddev_lps,
@@ -86,6 +94,7 @@ fn setup_and_bench(
     start_line: usize,
     _terminate_pc_of: bool,
 ) -> Result<()> {
+    let setup_start = Instant::now();
     let vars = read_vars()?;
     let program = read_program()?;
     let mut vm = IRMachine::from_ast(CodegenOptions {
@@ -93,6 +102,7 @@ fn setup_and_bench(
         protect_globals: true,
     }, program);
     vm.set_next_line(start_line);
+    vm.optimize();
     let outer_iters = max_lines / 1000;
     let mut samples = Vec::with_capacity(outer_iters.min(1_000_000));
     let mut elapsed_lines = 0;
@@ -108,6 +118,7 @@ fn setup_and_bench(
         });
     }
 
+    let setup_s = setup_start.elapsed().as_secs_f32();
     let start = Instant::now();
 
     'outer: for _ in 0..=outer_iters {
@@ -137,6 +148,7 @@ fn setup_and_bench(
     iter.next_back();
     print_results(
         &vm,
+        setup_s,
         elapsed_s,
         elapsed_lines,
         iter.map(|d| d.as_secs_f32()).collect(),

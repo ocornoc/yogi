@@ -41,6 +41,7 @@ fn main() {
         set_core_affinity();
         let script = script();
         let mut vm = ir::IRMachine::from_ast(Default::default(), script);
+        vm.optimize();
         vm.set_ident(&Ident::global("s"), Value::Str("Hello Cylon".to_string().into()));
         vm.set_ident(&Ident::global("i"), Value::Num(6.into()));
         loop {
