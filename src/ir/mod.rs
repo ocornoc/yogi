@@ -655,6 +655,7 @@ mod tests {
         assert_eq!(
             values[&Ident::global("output")],
             optimized_ir_machine.get_ident_value(&Ident::global("output")),
+            "unoptimized:\n{ir_machine}\noptimized:\n{optimized_ir_machine}",
         );
         for (ident, value) in values {
             assert_eq!(
@@ -664,6 +665,7 @@ mod tests {
             assert_eq!(
                 *value,
                 optimized_ir_machine.get_ident_value(ident),
+                "unoptimized:\n{ir_machine}\noptimized:\n{optimized_ir_machine}",
             );
         }
     }
