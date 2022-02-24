@@ -372,7 +372,7 @@ impl IRMachine {
             ..Default::default()
         };
         codegen.codegen_from_program(program);
-        IRMachine {
+        let mut machine = IRMachine {
             sections: codegen.sections,
             current_sect: codegen.lines[0],
             lines: codegen.lines,
@@ -389,6 +389,8 @@ impl IRMachine {
                 })
                 .map(|(k, v)| (k, v.into()))
                 .collect(),
-        }
+        };
+        machine.replace_duplicates();
+        machine
     }
 }

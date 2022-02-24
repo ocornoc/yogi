@@ -39,6 +39,26 @@ pub struct SectionCode {
     success: SectionOrLine,
 }
 
+impl SectionCode {
+    fn replace_duplicates(&mut self, nums: &mut Numbers, strs: &mut Strings) {
+        let mut i = 0;
+        while i < self.instrs.len() {
+            match self.instrs[i].dup_replace_with(nums, strs) {
+                Some(Some(splice)) => {
+                    self.instrs[i] = splice;
+                },
+                Some(None) => {
+                    self.instrs.remove(i);
+                    continue;
+                },
+                None => (),
+            }
+
+            i += 1;
+        }
+    }
+}
+
 type Sections = Vec<SectionCode>;
 type Lines = Vec<Section>;
 type CurrentSect = Section;
@@ -117,21 +137,18 @@ impl IRMachine {
             },
             Instruction::CopyNum(from, to) => {
                 profiling::scope!("execute_copy_num");
-                if from != to {
-                    *self.num_mut(to).unwrap() = *self.num_ref(from).unwrap();
-                }
+                debug_assert_ne!(from, to);
+                *self.num_mut(to).unwrap() = *self.num_ref(from).unwrap();
             },
             Instruction::CopyStr(from, to) => {
                 profiling::scope!("execute_copy_str");
-                if from != to {
-                    self.str_mut(to).unwrap().clone_from(&self.str_ref(from).unwrap());
-                }
+                debug_assert_ne!(from, to);
+                self.str_mut(to).unwrap().clone_from(&self.str_ref(from).unwrap());
             },
             Instruction::CopyVal(from, to) => {
                 profiling::scope!("execute_copy_val");
-                if from != to {
-                    self.val_mut(to).unwrap().clone_from(&self.val_ref(from).unwrap());
-                }
+                debug_assert_ne!(from, to);
+                self.val_mut(to).unwrap().clone_from(&self.val_ref(from).unwrap());
             },
             Instruction::ValueifyNum(n, v) => {
                 profiling::scope!("execute_valueify_num");
@@ -193,88 +210,96 @@ impl IRMachine {
                 *self.num_mut(n).unwrap() = !&*self.val_ref(v).unwrap();
             },
             Instruction::AddNum(n1, n2) => {
+                debug_assert_ne!(n1, n2);
                 profiling::scope!("execute_add_num");
-                if n1 == n2 {
-                    let mut n = self.num_mut(n1).unwrap();
-                    let n2 = n.clone();
-                    *n += n2;
-                } else {
-                    *self.num_mut(n1).unwrap() += *self.num_ref(n2).unwrap();
-                }
+                *self.num_mut(n1).unwrap() += *self.num_ref(n2).unwrap();
+            },
+            Instruction::AddSelfNum(n) => {
+                profiling::scope!("execute_add_self_num");
+                let mut n = self.num_mut(n).unwrap();
+                let n2 = n.clone();
+                *n += n2;
             },
             Instruction::AddStr(s1, s2) => {
                 profiling::scope!("execute_add_str");
-                if s1 == s2 {
-                    self.str_mut(s1).unwrap().duplicate();
-                } else {
-                    *self.str_mut(s1).unwrap() += &self.str_ref(s2).unwrap();
-                }
+                debug_assert_ne!(s1, s2);
+                *self.str_mut(s1).unwrap() += &self.str_ref(s2).unwrap();
+            },
+            Instruction::AddSelfStr(s) => {
+                profiling::scope!("execute_add_self_str");
+                self.str_mut(s).unwrap().duplicate();
             },
             Instruction::AddVal(v1, v2) => {
                 profiling::scope!("execute_add_val");
-                if v1 == v2 {
-                    match *self.val_mut(v1).unwrap() {
-                        Value::Num(ref mut n) => {
-                            let n2 = n.clone();
-                            *n += n2;
-                        },
-                        Value::Str(ref mut s) => {
-                            s.duplicate();
-                        },
-                    }
-                } else {
-                    *self.val_mut(v1).unwrap() += &self.val_ref(v2).unwrap();
+                debug_assert_ne!(v1, v2);
+                *self.val_mut(v1).unwrap() += &self.val_ref(v2).unwrap();
+            },
+            Instruction::AddSelfVal(v) => {
+                profiling::scope!("execute_add_self_val");
+                match *self.val_mut(v).unwrap() {
+                    Value::Num(ref mut n) => {
+                        let n2 = n.clone();
+                        *n += n2;
+                    },
+                    Value::Str(ref mut s) => {
+                        s.duplicate();
+                    },
                 }
             },
             Instruction::SubNum(n1, n2) => {
                 profiling::scope!("execute_sub_num");
-                if n1 == n2 {
-                    *self.num_mut(n1).unwrap() = Number::ZERO;
-                } else {
-                    *self.num_mut(n1).unwrap() -= *self.num_ref(n2).unwrap();
-                }
+                debug_assert_ne!(n1, n2);
+                *self.num_mut(n1).unwrap() -= *self.num_ref(n2).unwrap();
             },
             Instruction::SubStr(s1, s2) => {
                 profiling::scope!("execute_sub_str");
-                if s1 == s2 {
-                    self.str_mut(s1).unwrap().clear();
-                } else {
-                    *self.str_mut(s1).unwrap() -= &self.str_ref(s2).unwrap();
-                }
+                debug_assert_ne!(s1, s2);
+                *self.str_mut(s1).unwrap() -= &self.str_ref(s2).unwrap();
             },
             Instruction::SubVal(v1, v2) => {
                 profiling::scope!("execute_sub_val");
-                if v1 == v2 {
-                    match *self.val_mut(v1).unwrap() {
-                        Value::Num(ref mut n) => {
-                            *n = Number::ZERO;
-                        },
-                        Value::Str(ref mut s) => {
-                            s.clear();
-                        },
-                    }
-                } else {
-                    *self.val_mut(v1).unwrap() -= &self.val_ref(v2).unwrap();
+                debug_assert_ne!(v1, v2);
+                *self.val_mut(v1).unwrap() -= &self.val_ref(v2).unwrap();
+            },
+            Instruction::SubSelfVal(v) => {
+                profiling::scope!("execute_sub_self_val");
+                match *self.val_mut(v).unwrap() {
+                    Value::Num(ref mut n) => {
+                        *n = Number::ZERO;
+                    },
+                    Value::Str(ref mut s) => {
+                        s.clear();
+                    },
                 }
             },
             Instruction::Mul(n1, n2) => {
                 profiling::scope!("execute_mul");
+                debug_assert_ne!(n1, n2);
                 let mut n = self.num_mut(n1).unwrap();
-                let n2 = if n1 == n2 {
-                    n.clone()
-                } else {
-                    self.num_ref(n2).unwrap().clone()
-                };
+                let n2 = self.num_ref(n2).unwrap().clone();
+                *n *= n2;
+            },
+            Instruction::MulSelf(n) => {
+                profiling::scope!("execute_mul_self");
+                let mut n = self.num_mut(n).unwrap();
+                let n2 = n.clone();
                 *n *= n2;
             },
             Instruction::Div(n1, n2) => {
                 profiling::scope!("execute_div");
+                debug_assert_ne!(n1, n2);
                 let mut n = self.num_mut(n1).unwrap();
-                let n2 = if n1 == n2 {
-                    n.clone()
+                let n2 = self.num_ref(n2).unwrap().clone();
+                if let Ok(v) = *n / n2 {
+                    *n = v;
                 } else {
-                    self.num_ref(n2).unwrap().clone()
-                };
+                    self.runtime_err.store(true, Ordering::Relaxed);
+                }
+            },
+            Instruction::DivSelf(n) => {
+                profiling::scope!("execute_div_self");
+                let mut n = self.num_mut(n).unwrap();
+                let n2 = n.clone();
                 if let Ok(v) = *n / n2 {
                     *n = v;
                 } else {
@@ -283,12 +308,19 @@ impl IRMachine {
             },
             Instruction::Rem(n1, n2) => {
                 profiling::scope!("execute_rem");
+                debug_assert_ne!(n1, n2);
                 let mut n = self.num_mut(n1).unwrap();
-                let n2 = if n1 == n2 {
-                    n.clone()
+                let n2 = self.num_ref(n2).unwrap().clone();
+                if let Ok(v) = *n % n2 {
+                    *n = v;
                 } else {
-                    self.num_ref(n2).unwrap().clone()
-                };
+                    self.runtime_err.store(true, Ordering::Relaxed);
+                }
+            },
+            Instruction::RemSelf(n) => {
+                profiling::scope!("execute_rem_self");
+                let mut n = self.num_mut(n).unwrap();
+                let n2 = n.clone();
                 if let Ok(v) = *n % n2 {
                     *n = v;
                 } else {
@@ -297,28 +329,34 @@ impl IRMachine {
             },
             Instruction::Pow(n1, n2) => {
                 profiling::scope!("execute_pow");
+                debug_assert_ne!(n1, n2);
                 let mut n = self.num_mut(n1).unwrap();
-                let n2 = if n1 == n2 {
-                    n.clone()
-                } else {
-                    self.num_ref(n2).unwrap().clone()
-                };
+                let n2 = self.num_ref(n2).unwrap().clone();
+                n.pow_assign(n2);
+            },
+            Instruction::PowSelf(n) => {
+                profiling::scope!("execute_pow_self");
+                let mut n = self.num_mut(n).unwrap();
+                let n2 = n.clone();
                 n.pow_assign(n2);
             },
             Instruction::Eq(l, r, out) => {
                 profiling::scope!("execute_eq_val");
+                debug_assert_ne!(l, r);
                 let l = &*self.val_ref(l).unwrap();
                 let r = &*self.val_ref(r).unwrap();
                 *self.num_mut(out).unwrap() = (l == r).into();
             },
             Instruction::Le(l, r, out) => {
                 profiling::scope!("execute_le_val");
+                debug_assert_ne!(l, r);
                 let l = &*self.val_ref(l).unwrap();
                 let r = &*self.val_ref(r).unwrap();
                 *self.num_mut(out).unwrap() = (l <= r).into();
             },
             Instruction::Lt(l, r, out) => {
                 profiling::scope!("execute_lt_val");
+                debug_assert_ne!(l, r);
                 let l = &*self.val_ref(l).unwrap();
                 let r = &*self.val_ref(r).unwrap();
                 *self.num_mut(out).unwrap() = (l < r).into();
@@ -401,6 +439,7 @@ impl IRMachine {
             },
             Instruction::And(n1, n2) => {
                 profiling::scope!("execute_and");
+                debug_assert_ne!(n1, n2);
                 let mut n = self.num_mut(n1).unwrap();
                 let n2 = if n1 == n2 {
                     n.clone()
@@ -411,6 +450,7 @@ impl IRMachine {
             },
             Instruction::Or(n1, n2) => {
                 profiling::scope!("execute_or");
+                debug_assert_ne!(n1, n2);
                 let mut n = self.num_mut(n1).unwrap();
                 let n2 = if n1 == n2 {
                     n.clone()
@@ -421,6 +461,12 @@ impl IRMachine {
             },
         };
         None
+    }
+
+    fn replace_duplicates(&mut self) {
+        for code in self.sections.iter_mut() {
+            code.replace_duplicates(&mut self.numbers, &mut self.strings);
+        }
     }
 
     #[profiling::function]

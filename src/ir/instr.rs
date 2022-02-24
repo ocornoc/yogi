@@ -98,15 +98,23 @@ pub(super) enum Instruction {
     NotNum(NumReg),
     NotVal(ValReg, NumReg),
     AddNum(NumReg, NumReg),
+    AddSelfNum(NumReg),
     AddStr(StrReg, StrReg),
+    AddSelfStr(StrReg),
     AddVal(ValReg, ValReg),
+    AddSelfVal(ValReg),
     SubNum(NumReg, NumReg),
     SubStr(StrReg, StrReg),
     SubVal(ValReg, ValReg),
+    SubSelfVal(ValReg),
     Mul(NumReg, NumReg),
+    MulSelf(NumReg),
     Div(NumReg, NumReg),
+    DivSelf(NumReg),
     Rem(NumReg, NumReg),
+    RemSelf(NumReg),
     Pow(NumReg, NumReg),
+    PowSelf(NumReg),
     Eq(ValReg, ValReg, NumReg),
     Le(ValReg, ValReg, NumReg),
     Lt(ValReg, ValReg, NumReg),
@@ -138,12 +146,13 @@ impl Instruction {
             JumpIfError(_) => ArrayVec::new_const(),
             JumpSectionIf(_, r) | CopyNum(r, _) | ValueifyNum(r, _) | StringifyNum(r, _)
             | IsTruthyNum(r) | NotNum(r) | IncNum(r) | Abs(r) | Fact(r) | Sqrt(r) | Sin(r) | Cos(r)
-            | Tan(r) | Asin(r) | Acos(r) | Atan(r) | Neg(r) | DecNum(r) =>
-                [r.into()].as_ref().try_into().unwrap(),
-            CopyStr(r, _) | ValueifyStr(r, _) | IncStr(r) | DecStr(r) =>
+            | Tan(r) | Asin(r) | Acos(r) | Atan(r) | Neg(r) | DecNum(r) | AddSelfNum(r) | MulSelf(r)
+            | DivSelf(r) | RemSelf(r) | PowSelf(r) => [r.into()].as_ref().try_into().unwrap(),
+            CopyStr(r, _) | ValueifyStr(r, _) | IncStr(r) | DecStr(r) | AddSelfStr(r) =>
                 [r.into()].as_ref().try_into().unwrap(),
             CopyVal(r, _) | NumberifyVal(r, _) | StringifyVal(r, _) | IsTruthyVal(r, _)
-            | NotVal(r, _) | IncVal(r) | DecVal(r) => [r.into()].as_ref().try_into().unwrap(),
+            | NotVal(r, _) | IncVal(r) | DecVal(r) | AddSelfVal(r) | SubSelfVal(r) =>
+                [r.into()].as_ref().try_into().unwrap(),
             AddNum(r1, r2) | SubNum(r1, r2) | Mul(r1, r2) | Div(r1, r2) | Rem(r1, r2) | Pow(r1, r2)
             | And(r1, r2) | Or(r1, r2) => [r1.into(), r2.into()].into(),
             SubStr(r1, r2) | AddStr(r1, r2) => [r1.into(), r2.into()].into(),
@@ -159,12 +168,13 @@ impl Instruction {
             CopyNum(_, r) | IsTruthyNum(r) | NumberifyVal(_, r) | IsTruthyVal(_, r) | NotNum(r)
             | NotVal(_, r) | AddNum(r, _) | SubNum(r, _) | Mul(r, _) | Div(r, _) | Rem(r, _)
             | Pow(r, _) | Eq(.., r) | Le(.., r) | Lt(.., r) | IncNum(r) | Abs(r) | Fact(r) | Sqrt(r)
-            | Sin(r) | Cos(r) | Tan(r) | Asin(r) | Acos(r) | Atan(r)
-            | Neg(r) | And(r, _) | Or(r, _) | DecNum(r) => Some(r.into()),
+            | Sin(r) | Cos(r) | Tan(r) | Asin(r) | Acos(r) | Atan(r) | Neg(r) | And(r, _) | Or(r, _)
+            | DecNum(r) | AddSelfNum(r) | MulSelf(r) | DivSelf(r) | RemSelf(r) | PowSelf(r) =>
+                Some(r.into()),
             StringifyNum(_, r) | CopyStr(_, r) | StringifyVal(_, r) | AddStr(r, _) | SubStr(r, _)
-            | IncStr(r) | DecStr(r) => Some(r.into()),
+            | IncStr(r) | DecStr(r) | AddSelfStr(r) => Some(r.into()),
             CopyVal(_, r) | ValueifyNum(_, r) | ValueifyStr(_, r) | AddVal(r, _) | SubVal(r, _)
-            | IncVal(r) | DecVal(r) => Some(r.into()),
+            | IncVal(r) | DecVal(r) | AddSelfVal(r) | SubSelfVal(r) => Some(r.into()),
             JumpSectionIf(..) | JumpIfError(_) => None,
         }
     }
@@ -227,7 +237,9 @@ impl Instruction {
             | Instruction::ValueifyNum(n, _) | Instruction::NumberifyVal(_, n)
             | Instruction::StringifyNum(n, _) | Instruction::IsTruthyNum(n)
             | Instruction::IsTruthyVal(_, n) | Instruction::NotNum(n) | Instruction::NotVal(_, n)
-            | Instruction::Eq(_, _, n) | Instruction::Le(_, _, n) | Instruction::Lt(_, _, n) =>
+            | Instruction::Eq(_, _, n) | Instruction::Le(_, _, n) | Instruction::Lt(_, _, n)
+            | Instruction::AddSelfNum(n) | Instruction::MulSelf(n) | Instruction::DivSelf(n)
+            | Instruction::RemSelf(n) | Instruction::PowSelf(n) =>
                 [n].into_iter().collect(),
             Instruction::CopyNum(n1, n2) | Instruction::AddNum(n1, n2) | Instruction::SubNum(n1, n2)
             | Instruction::Mul(n1, n2) | Instruction::Div(n1, n2) | Instruction::Rem(n1, n2)
@@ -240,7 +252,8 @@ impl Instruction {
     fn get_mut_str_regs(&mut self) -> ArrayVec<&mut StrReg, 2> {
         match self {
             Instruction::ValueifyStr(s, _) | Instruction::StringifyNum(_, s)
-            | Instruction::StringifyVal(_, s) | Instruction::IncStr(s) | Instruction::DecStr(s) =>
+            | Instruction::StringifyVal(_, s) | Instruction::IncStr(s) | Instruction::DecStr(s)
+            | Instruction::AddSelfStr(s) =>
                 [s].into_iter().collect(),
             Instruction::AddStr(s1, s2) | Instruction::SubStr(s1, s2)
             | Instruction::CopyStr(s1, s2) => [s1, s2].into(),
@@ -253,7 +266,8 @@ impl Instruction {
             Instruction::ValueifyNum(_, v) | Instruction::ValueifyStr(_, v)
             | Instruction::NumberifyVal(v, _) | Instruction::StringifyVal(v, _)
             | Instruction::IsTruthyVal(v, _) | Instruction::NotVal(v, _) | Instruction::IncVal(v)
-            | Instruction::DecVal(v) => [v].into_iter().collect(),
+            | Instruction::DecVal(v) | Instruction::AddSelfVal(v) | Instruction::SubSelfVal(v) =>
+                [v].into_iter().collect(),
             Instruction::CopyVal(v1, v2) | Instruction::AddVal(v1, v2) | Instruction::SubVal(v1, v2)
             | Instruction::Eq(v1, v2, _) | Instruction::Le(v1, v2, _)
             | Instruction::Lt(v1, v2, _) => [v1, v2].into(),
@@ -320,6 +334,51 @@ impl Instruction {
             | Instruction::DecStr(_)
             | Instruction::DecVal(_),
         )
+    }
+
+    pub fn dup_replace_with(
+        self,
+        nums: &mut Numbers,
+        strs: &mut Strings,
+    ) -> Option<Option<Instruction>> {
+        Some(match self {
+            Instruction::CopyNum(r, w) if r == w => None,
+            Instruction::CopyStr(r, w) if r == w => None,
+            Instruction::CopyVal(r, w) if r == w => None,
+            Instruction::AddNum(rw, r) if rw == r => Some(Instruction::AddSelfNum(rw)),
+            Instruction::AddStr(rw, r) if rw == r => Some(Instruction::AddSelfStr(rw)),
+            Instruction::AddVal(rw, r) if rw == r => Some(Instruction::AddSelfVal(rw)),
+            Instruction::SubNum(rw, r) if rw == r => {
+                let reg = NumReg(nums.len());
+                nums.push(Number::ZERO.into());
+                Some(Instruction::CopyNum(reg, rw))
+            },
+            Instruction::SubStr(rw, r) if rw == r => {
+                let reg = StrReg(strs.len());
+                strs.push(YString::default().into());
+                Some(Instruction::CopyStr(reg, rw))
+            },
+            Instruction::SubVal(rw, r) if rw == r => Some(Instruction::SubSelfVal(rw)),
+            Instruction::Mul(rw, r) if rw == r => Some(Instruction::MulSelf(rw)),
+            Instruction::Div(rw, r) if rw == r => Some(Instruction::DivSelf(rw)),
+            Instruction::Rem(rw, r) if rw == r => Some(Instruction::RemSelf(rw)),
+            Instruction::Pow(rw, r) if rw == r => Some(Instruction::PowSelf(rw)),
+            Instruction::Eq(rl, rr, w) | Instruction::Le(rl, rr, w) if rl == rr => {
+                let reg = NumReg(nums.len());
+                nums.push(Number::ONE.into());
+                Some(Instruction::CopyNum(reg, w))
+            },
+            Instruction::Lt(rl, rr, w) if rl == rr => {
+                let reg = NumReg(nums.len());
+                nums.push(Number::ZERO.into());
+                Some(Instruction::CopyNum(reg, w))
+            },
+            Instruction::And(rw, r) | Instruction::Or(rw, r) if rw == r =>
+                Some(Instruction::IsTruthyNum(rw)),
+            _ => {
+                return None;
+            }
+        })
     }
 }
 
@@ -416,6 +475,22 @@ impl Display for Instruction {
                 write!(f, "{} &= {}", l, r),
             Instruction::Or(l, r) =>
                 write!(f, "{} |= {}", l, r),
+            Instruction::AddSelfNum(r) =>
+                write!(f, "{r} += {r}"),
+            Instruction::AddSelfStr(r) =>
+                write!(f, "{r} += {r}"),
+            Instruction::AddSelfVal(r) =>
+                write!(f, "{r} += {r}"),
+            Instruction::SubSelfVal(r) =>
+                write!(f, "{r} -= {r}"),
+            Instruction::MulSelf(r) =>
+                write!(f, "{r} *= {r}"),
+            Instruction::DivSelf(r) =>
+                write!(f, "{r} /= {r}"),
+            Instruction::RemSelf(r) =>
+                write!(f, "{r} %= {r}"),
+            Instruction::PowSelf(r) =>
+                write!(f, "{r} ^= {r}"),
         }
     }
 }

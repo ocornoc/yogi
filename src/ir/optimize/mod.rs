@@ -75,6 +75,7 @@ pub(super) fn optimize(vm: &mut IRMachine) {
             }
         }
     }
+    vm.replace_duplicates();
 }
 
 fn checked_remove_numreg(
