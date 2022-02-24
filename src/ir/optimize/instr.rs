@@ -10,7 +10,6 @@ impl Optimization for RemoveRedundantInstrs {
 }
 */
 
-#[derive(Default, Debug)]
 pub struct ReorderInstrs;
 
 impl Optimization for ReorderInstrs {
