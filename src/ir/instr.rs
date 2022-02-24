@@ -313,7 +313,9 @@ impl Instruction {
             self,
             Instruction::NumberifyVal(..)
             | Instruction::Div(..)
-            | Instruction::Rem(..),
+            | Instruction::Rem(..)
+            | Instruction::DecStr(_)
+            | Instruction::DecVal(_),
         )
     }
 }
