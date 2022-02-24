@@ -173,6 +173,40 @@ impl Instruction {
         array
     }
 
+    pub fn can_swap(self, other: Self) -> bool {
+        match (self, other) {
+            // The same instruction cannot be reordered with itself (infinite loop).
+            _ if self == other => {
+                return false;
+            },
+            // Two jumpifs can only be reordered if they go to the same section and nl < nr.
+            (
+                Instruction::JumpSectionIf(sl, nl),
+                Instruction::JumpSectionIf(sr, nr),
+            ) if sl == sr => {
+                return nl < nr;
+            },
+            // No other instructions can be reordered with a jumpif. Also, jumperrs cannot be
+            // reordered forwards, only backwards.
+            (Instruction::JumpSectionIf(..), _) | (_, Instruction::JumpSectionIf(..))
+            | (Instruction::JumpIfError(_), _) => {
+                return false;
+            },
+            // A jumperr can be reordered backwards iff the one before can't runtime error and
+            // doesn't modify anything.
+            (_, Instruction::JumpIfError(_)) => {
+                return !self.can_runtime_err() && self.modifies().is_none();
+            },
+            (_, _) if
+                std::mem::discriminant(&self) == std::mem::discriminant(&other)
+                && disjoint(self.relevant(), &other.relevant())
+            => {
+                unsafe { !raw_bytes_lt_instruction(&other, &self) }
+            },
+            _ => false,
+        }
+    }
+
     pub const fn get_section(self) -> Option<Section> {
         if let Instruction::JumpSectionIf(s, _) | Instruction::JumpIfError(s) = self {
             Some(s)
@@ -379,4 +413,29 @@ impl Display for Instruction {
                 write!(f, "{} |= {}", l, r),
         }
     }
+}
+
+#[inline]
+fn disjoint<T, L, R>(l: L, r: &R) -> bool
+where
+    T: PartialEq,
+    L: IntoIterator<Item = T>,
+    R: IntoIterator<Item = T> + Clone,
+{
+    for l in l {
+        for r in r.clone() {
+            if l == r {
+                return false;
+            }
+        }
+    }
+    true
+}
+
+#[inline]
+unsafe fn raw_bytes_lt_instruction(x: &Instruction, y: &Instruction) -> bool {
+    const SIZE: usize = std::mem::size_of::<Instruction>();
+    let x = (x as *const Instruction).cast::<[u8; SIZE]>().as_ref().unwrap_unchecked();
+    let y = (y as *const Instruction).cast::<[u8; SIZE]>().as_ref().unwrap_unchecked();
+    x < y
 }
