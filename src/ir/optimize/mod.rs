@@ -1,7 +1,7 @@
 use super::*;
 
 mod sections;
-mod instr_scheduling;
+mod instr;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct OptControlFlow {
@@ -59,7 +59,7 @@ trait Optimization {
 pub(super) fn optimize(vm: &mut IRMachine) {
     let mut optimizations: Vec<Box<dyn Optimization>> = vec![
         Box::new(sections::CombineSections),
-        Box::new(instr_scheduling::ReorderInstrs),
+        Box::new(instr::ReorderInstrs),
     ];
     let mut progress = true;
     remove_unfixed_sections(&mut vm.lines, &mut vm.sections);
