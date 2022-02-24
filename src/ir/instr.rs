@@ -82,8 +82,11 @@ pub(super) struct Section(pub usize);
 pub(super) enum Instruction {
     JumpSectionIf(Section, NumReg),
     JumpIfError(Section),
+    /// Read, Write
     CopyNum(NumReg, NumReg),
+    /// Read, Write
     CopyStr(StrReg, StrReg),
+    /// Read, Write
     CopyVal(ValReg, ValReg),
     ValueifyNum(NumReg, ValReg),
     ValueifyStr(StrReg, ValReg),
