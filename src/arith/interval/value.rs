@@ -271,6 +271,21 @@ impl From<Number> for ValueInterval {
     }
 }
 
+impl From<YString> for ValueInterval {
+    fn from(ys: YString) -> Self {
+        StringInterval::from(ys).into()
+    }
+}
+
+impl From<Value> for ValueInterval {
+    fn from(v: Value) -> Self {
+        match v {
+            Value::Num(n) => n.into(),
+            Value::Str(s) => s.into(),
+        }
+    }
+}
+
 impl From<&str> for ValueInterval {
     fn from(s: &str) -> Self {
         let strings: StringInterval = s.into();

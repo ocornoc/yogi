@@ -231,6 +231,12 @@ impl From<&str> for StringInterval {
     }
 }
 
+impl From<YString> for StringInterval {
+    fn from(ys: YString) -> Self {
+        ys.to_string().as_str().into()
+    }
+}
+
 impl AddAssign<&StringInterval> for StringInterval {
     fn add_assign(&mut self, rhs: &StringInterval) {
         self.length = self.length + rhs.length;
