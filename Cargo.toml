@@ -18,6 +18,7 @@ opt-level = 1
 opt-level = 3
 
 [profile.release]
+strip = true
 lto = "fat"
 
 [target.'cfg(target_os = "linux")'.dependencies]
