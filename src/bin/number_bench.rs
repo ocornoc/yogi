@@ -2,6 +2,13 @@ use std::time::Instant;
 use yogi::*;
 use parser::YololParser;
 
+type VM = yogi::ir::IRMachine;
+
+const SAMPLE_SIZE: usize = 100_000;
+const SAMPLES: usize = 100;
+const OUTLIERS_REMOVED: usize = 4;
+const ELAPSED_LINES: usize = SAMPLE_SIZE * SAMPLES;
+
 fn script() -> parser::Program {
     YololParser::unrestricted().parse(
 r#":done++ b=97 c=89
@@ -29,8 +36,13 @@ fn set_core_affinity() {
     );
 }
 
+fn bench_sample(vm: &mut VM) -> f32 {
+    let start = Instant::now();
+    vm.step_repeat(SAMPLE_SIZE);
+    start.elapsed().as_secs_f32()
+}
+
 fn main() {
-    const NUM_LINES: usize = 1_000_000;
     set_core_affinity();
     let script = script();
     let mut vm = ir::IRMachine::from_ast(Default::default(), script);
@@ -39,24 +51,31 @@ fn main() {
         vm.optimize();
         vm.print_bytecode(std::fs::File::create("optimized.yogir").unwrap()).unwrap();
     }
-    loop {
-        let start = Instant::now();
-        vm.step_repeat(NUM_LINES);
-        let done = Instant::now();
-        let dur = done - start;
-        let time_taken = dur.as_secs_f32();
-        let lines_per_sec = NUM_LINES as f32 / time_taken;
-        let ns_per_line = dur.as_nanos() as f32 / NUM_LINES as f32;
-        println!(
-            "finished execution of {} lines in {}s at a rate of {} lines/sec ({} ns/line).",
-            NUM_LINES,
-            time_taken,
-            lines_per_sec,
-            ns_per_line,
-        );
-        println!("idents as of right now");
-        for (ident, val) in vm.idents() {
-            println!("{}: {}", ident, val);
-        }
+    let mut samples = Vec::with_capacity(SAMPLES + OUTLIERS_REMOVED);
+    for _ in 0..SAMPLES + OUTLIERS_REMOVED {
+        samples.push(bench_sample(&mut vm));
     }
+    // Remove the two largest and two smallest samples from the data set, in case of warmup/etc
+    samples.sort_unstable_by(|l, r| l.partial_cmp(r).unwrap());
+    for _ in 0..OUTLIERS_REMOVED / 2 {
+        samples.pop();
+        samples.remove(0);
+    }
+    // calculating some data
+    let elapsed_lines = ELAPSED_LINES;
+    let elapsed_s = samples.iter().copied().sum::<f32>();
+    let mean_lps = elapsed_lines as f32 / elapsed_s;
+    let mean_spl = mean_lps.recip();
+    let top: f32 = samples
+        .iter()
+        .map(|&s| (s.recip() - mean_spl).powi(2))
+        .sum::<f32>();
+    let bot: f32 = SAMPLES as f32;
+    // standard deviation for lines per second
+    let stddev_lps = (top / bot).sqrt();
+    println!("Total lines: {elapsed_lines}");
+    println!("Total time: {elapsed_s}");
+    println!("Mean lines per second: {mean_lps:.1} (\u{03c3} = {stddev_lps:.1} L/s)");
+    let mean_nspl = mean_spl * 1_000_000_000.0;
+    println!("Mean nanoseconds per line: {mean_nspl:.1}");
 }
