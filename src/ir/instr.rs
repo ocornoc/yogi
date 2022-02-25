@@ -36,7 +36,7 @@ impl PartialEq<AnyReg> for ValReg {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, From, Display, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, From, Display, PartialOrd, Ord, Hash)]
 pub(super) enum AnyReg {
     Num(NumReg),
     Str(StrReg),
