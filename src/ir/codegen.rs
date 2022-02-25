@@ -377,9 +377,9 @@ impl IRMachine {
             current_sect: codegen.lines[0],
             lines: codegen.lines,
             runtime_err: false.into(),
-            numbers: codegen.numbers.into_iter().map(AtomicRefCell::new).collect(),
-            strings: codegen.strings.into_iter().map(AtomicRefCell::new).collect(),
-            values: codegen.values.into_iter().map(AtomicRefCell::new).collect(),
+            numbers: codegen.numbers.into_iter().map(Into::into).collect(),
+            strings: codegen.strings.into_iter().map(Into::into).collect(),
+            values: codegen.values.into_iter().map(Into::into).collect(),
             idents: codegen.idents
                 .into_iter()
                 .filter(|(i, _)| if i.global {
