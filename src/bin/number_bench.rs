@@ -30,7 +30,7 @@ fn set_core_affinity() {
 }
 
 fn main() {
-    const NUM_LINES: usize = 500_000;
+    const NUM_LINES: usize = 1_000_000;
     set_core_affinity();
     let script = script();
     let mut vm = ir::IRMachine::from_ast(Default::default(), script);
