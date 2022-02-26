@@ -77,5 +77,12 @@ fn main() {
     println!("Total time: {elapsed_s}");
     println!("Mean lines per second: {mean_lps:.1} (\u{03c3} = {stddev_lps:.1} L/s)");
     let mean_nspl = mean_spl * 1_000_000_000.0;
-    println!("Mean nanoseconds per line: {mean_nspl:.1}");
+    let top: f32 = samples
+        .iter()
+        .map(|&s| ((s * 1_000_000_000.0) / (SAMPLE_SIZE as f32) - mean_nspl).powi(2))
+        .sum::<f32>();
+    let bot: f32 = SAMPLES as f32;
+    // standard deviation for nanoseconds per line
+    let stddev_nspl = (top / bot).sqrt();
+    println!("Mean nanoseconds per line: {mean_nspl:.1} (\u{03c3} = {stddev_nspl:.1} ns/L)");
 }
