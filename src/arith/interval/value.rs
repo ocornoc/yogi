@@ -5,7 +5,7 @@ macro_rules! num_binop_assign {
         impl $traitassign<&ValueInterval> for ValueInterval {
             fn $fn_assign(&mut self, rhs: &Self) {
                 let type_error = self.can_be_string() || rhs.can_be_string();
-                self.strings = None;
+                self.strings = StringInterval::nothing();
                 self.numbers.$fn_assign(&rhs.numbers);
                 self.numbers.runtime_error |= type_error;
             }
@@ -26,7 +26,7 @@ macro_rules! num_unop {
     ($fn:ident) => {
         pub fn $fn(&mut self) {
             let type_error = self.can_be_string();
-            self.strings = None;
+            self.strings = StringInterval::nothing();
             self.numbers.$fn();
             self.numbers.runtime_error |= type_error;
         }
@@ -37,21 +37,21 @@ macro_rules! num_unop {
 pub struct ValueInterval {
     #[as_ref]
     numbers: NumberIntervals,
-    strings: Option<StringInterval>,
+    strings: StringInterval,
 }
 
 impl ValueInterval {
     pub fn everything() -> Self {
         ValueInterval {
             numbers: NumberIntervals::everything(),
-            strings: Some(StringInterval::everything()),
+            strings: StringInterval::everything(),
         }
     }
 
     pub fn uninitialized() -> Self {
         ValueInterval {
             numbers: Number::ZERO.into(),
-            strings: None,
+            strings: StringInterval::nothing(),
         }
     }
 
@@ -61,21 +61,18 @@ impl ValueInterval {
 
     pub fn reset_runtime_err(&mut self) {
         self.numbers.reset_runtime_err();
-        if let Some(ref mut string_intervals) = self.strings {
-            string_intervals.reset_runtime_err();
-        }
+        self.strings.reset_runtime_err();
     }
 
     pub fn could_runtime_err(&self) -> bool {
-        self.numbers.runtime_error || if let Some(ref string_intervals) = self.strings {
-            string_intervals.runtime_error
-        } else {
-            false
-        }
+        self.numbers.runtime_error || self.strings.runtime_error
     }
 
     pub fn disable_strings(&mut self) {
-        self.strings = None;
+        self.strings = StringInterval {
+            runtime_error: self.strings.runtime_error,
+            ..StringInterval::nothing()
+        };
     }
 
     pub fn disable_numbers(&mut self) {
@@ -90,7 +87,7 @@ impl ValueInterval {
     }
 
     pub fn can_be_string(&self) -> bool {
-        self.strings.is_some()
+        !self.strings.is_nothing()
     }
 
     pub fn can_type_mismatch(&self, other: &Self) -> bool {
@@ -98,40 +95,27 @@ impl ValueInterval {
             || (self.can_be_string() && other.can_be_number())
     }
 
-    pub fn stringify(&self) -> Option<StringInterval> {
-        if let Some(mut strings) = self.numbers.stringify() {
-            if let Some(ref real_strings) = self.strings {
-                strings.union(real_strings);
-            }
-            Some(strings)
-        } else {
-            self.strings.clone()
-        }
-    }
-
-    fn try_stringify_binop(&self, other: &Self) -> Option<(StringInterval, StringInterval)> {
-        Some((self.stringify()?, other.stringify()?))
+    pub fn stringify(&self) -> StringInterval {
+        let mut strings = self.numbers.stringify();
+        strings.union(&self.strings);
+        strings
     }
 
     pub fn pow_assign(&mut self, rhs: &Self) {
         let type_error = self.can_be_string() || rhs.can_be_string();
-        self.strings = None;
+        self.strings = StringInterval::nothing();
         self.numbers.pow_assign(&rhs.numbers);
         self.numbers.runtime_error |= type_error;
     }
 
     pub fn pre_inc(&mut self) {
         self.numbers.pre_inc();
-        if let Some(ref mut strings) = self.strings {
-            strings.pre_inc();
-        }
+        self.strings.pre_inc();
     }
 
     pub fn pre_dec(&mut self) {
         self.numbers.pre_dec();
-        if let Some(ref mut strings) = self.strings {
-            strings.pre_dec();
-        }
+        self.strings.pre_dec();
     }
 
     num_unop!(abs);
@@ -153,9 +137,9 @@ impl ValueInterval {
         if self.can_be_number() && other.can_be_number() {
             possibilities |= &self.numbers.int_ne(&other.numbers);
         }
-        if let (Some(lhs), Some(rhs)) = (&self.strings, &other.strings) {
-            possibilities |= &lhs.int_ne(rhs);
-        }
+        let slhs = self.stringify();
+        let srhs = other.stringify();
+        possibilities |= &slhs.int_ne(&srhs);
         if self.can_type_mismatch(other) {
             possibilities |= &Number::from(true).into();
         }
@@ -167,9 +151,9 @@ impl ValueInterval {
         if self.can_be_number() && other.can_be_number() {
             possibilities |= &self.numbers.int_le(&other.numbers);
         }
-        if let Some((lhs, rhs)) = self.try_stringify_binop(other) {
-            possibilities |= &lhs.int_le(&rhs);
-        }
+        let slhs = self.stringify();
+        let srhs = other.stringify();
+        possibilities |= &slhs.int_le(&srhs);
         possibilities
     }
 
@@ -178,9 +162,9 @@ impl ValueInterval {
         if self.can_be_number() && other.can_be_number() {
             possibilities |= &self.numbers.int_lt(&other.numbers);
         }
-        if let Some((lhs, rhs)) = self.try_stringify_binop(other) {
-            possibilities |= &lhs.int_lt(&rhs);
-        }
+        let slhs = self.stringify();
+        let srhs = other.stringify();
+        possibilities |= &slhs.int_lt(&srhs);
         possibilities
     }
 
@@ -189,9 +173,9 @@ impl ValueInterval {
         if self.can_be_number() && other.can_be_number() {
             possibilities |= &self.numbers.int_ge(&other.numbers);
         }
-        if let Some((lhs, rhs)) = self.try_stringify_binop(other) {
-            possibilities |= &lhs.int_ge(&rhs);
-        }
+        let slhs = self.stringify();
+        let srhs = other.stringify();
+        possibilities |= &slhs.int_ge(&srhs);
         possibilities
     }
 
@@ -200,9 +184,9 @@ impl ValueInterval {
         if self.can_be_number() && other.can_be_number() {
             possibilities |= &self.numbers.int_gt(&other.numbers);
         }
-        if let Some((lhs, rhs)) = self.try_stringify_binop(other) {
-            possibilities |= &lhs.int_gt(&rhs);
-        }
+        let slhs = self.stringify();
+        let srhs = other.stringify();
+        possibilities |= &slhs.int_gt(&srhs);
         possibilities
     }
 
@@ -215,7 +199,7 @@ impl ValueInterval {
     }
 
     pub fn set_to_bool(&mut self, bools: BoolInterval) {
-        self.strings = None;
+        self.strings = StringInterval::nothing();
         self.numbers.set_to_bool(bools);
     }
 }
@@ -229,11 +213,7 @@ impl Default for ValueInterval {
 impl Display for ValueInterval {
     fn fmt(&self, f: &mut Formatter) -> FmtResult {
         let re = self.could_runtime_err();
-        if let Some(ref string_intervals) = self.strings {
-            write!(f, "Numbers: {}, Strings: {string_intervals}, RE: {re}", self.numbers)
-        } else {
-            write!(f, "Numbers: {}, Strings: ∅, RE: {re}", self.numbers)
-        }
+        write!(f, "Numbers: {}, Strings: {}, RE: {re}", self.numbers, self.strings)
     }
 }
 
@@ -241,7 +221,7 @@ impl From<NumberIntervals> for ValueInterval {
     fn from(numbers: NumberIntervals) -> Self {
         ValueInterval {
             numbers,
-            strings: None,
+            strings: StringInterval::nothing(),
         }
     }
 }
@@ -250,7 +230,7 @@ impl From<StringInterval> for ValueInterval {
     fn from(strings: StringInterval) -> Self {
         ValueInterval {
             numbers: NumberIntervals::nothing(),
-            strings: Some(strings),
+            strings: strings,
         }
     }
 }
@@ -259,7 +239,7 @@ impl From<BoolInterval> for ValueInterval {
     fn from(bools: BoolInterval) -> Self {
         ValueInterval {
             numbers: bools.into(),
-            strings: None,
+            strings: StringInterval::nothing(),
         }
     }
 }
@@ -295,9 +275,9 @@ impl From<&str> for ValueInterval {
 
 impl AddAssign<&ValueInterval> for ValueInterval {
     fn add_assign(&mut self, rhs: &ValueInterval) {
-        if let Some((lhs, rhs)) = self.try_stringify_binop(rhs) {
-            self.strings = Some(lhs + &rhs);
-        }
+        let slhs = self.stringify();
+        let srhs = rhs.stringify();
+        self.strings = slhs + &srhs;
         if self.can_be_number() && rhs.can_be_number() {
             self.numbers += &rhs.numbers;
         }
@@ -315,9 +295,9 @@ impl Add<&ValueInterval> for ValueInterval {
 
 impl SubAssign<&ValueInterval> for ValueInterval {
     fn sub_assign(&mut self, rhs: &ValueInterval) {
-        if let Some((lhs, rhs)) = self.try_stringify_binop(rhs) {
-            self.strings = Some(lhs + &rhs);
-        }
+        let slhs = self.stringify();
+        let srhs = rhs.stringify();
+        self.strings = slhs - &srhs;
         if self.can_be_number() && rhs.can_be_number() {
             self.numbers += &rhs.numbers;
         }
@@ -342,7 +322,7 @@ impl Neg for &mut ValueInterval {
 
     fn neg(self) -> Self::Output {
         let type_error = self.can_be_string();
-        self.strings = None;
+        self.strings = StringInterval::nothing();
         -&mut self.numbers;
         self.numbers.runtime_error |= type_error;
     }

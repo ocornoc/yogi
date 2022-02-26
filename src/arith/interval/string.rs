@@ -10,7 +10,7 @@ pub(super) struct LengthInterval {
 
 impl LengthInterval {
     fn truncate(&mut self) {
-        self.end = self.end.min(MAX_LENGTH);
+        self.end = self.end.min(MAX_LENGTH + 1);
         self.start = self.start.min(self.end);
     }
 
@@ -28,8 +28,8 @@ impl LengthInterval {
             Bound::Unbounded => 0,
         };
         let end = match range.start_bound() {
-            Bound::Included(&i) => i,
-            Bound::Excluded(&i) => i.saturating_sub(1),
+            Bound::Included(&i) => i.saturating_add(1),
+            Bound::Excluded(&i) => i,
             Bound::Unbounded => MAX_LENGTH,
         };
         let mut interval = LengthInterval {
@@ -54,8 +54,8 @@ impl From<u16> for LengthInterval {
 
 impl<'a> Arbitrary<'a> for LengthInterval {
     fn arbitrary(u: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
-        let start = u.int_in_range(0..=MAX_LENGTH)?;
-        let end = u.int_in_range(start..=MAX_LENGTH)?;
+        let start = u.int_in_range(0..=MAX_LENGTH + 1)?;
+        let end = u.int_in_range(start..=MAX_LENGTH + 1)?;
         Ok(LengthInterval {
             start,
             end,
@@ -73,7 +73,7 @@ impl RangeBounds<u16> for LengthInterval {
     }
 
     fn end_bound(&self) -> Bound<&u16> {
-        Bound::Included(&self.end)
+        Bound::Excluded(&self.end)
     }
 
     fn contains<U>(&self, item: &U) -> bool
@@ -81,16 +81,16 @@ impl RangeBounds<u16> for LengthInterval {
         u16: PartialOrd<U>,
         U: ?Sized + PartialOrd<u16>,
     {
-        (self.start..=self.end).contains(item)
+        (self.start..self.end).contains(item)
     }
 }
 
 impl Display for LengthInterval {
     fn fmt(&self, f: &mut Formatter) -> FmtResult {
         if self.start == self.end {
-            write!(f, "{{{}}}", self.start)
+            write!(f, "∅")
         } else {
-            write!(f, "[length: {}, {}]", self.start, self.end)
+            write!(f, "[length: {}..{}]", self.start, self.end)
         }
     }
 }
@@ -133,6 +133,17 @@ impl StringInterval {
             length: LengthInterval::from(..),
             runtime_error: false,
         }
+    }
+
+    pub fn nothing() -> Self {
+        StringInterval {
+            length: LengthInterval::from(0..0),
+            runtime_error: false,
+        }
+    }
+
+    pub fn is_nothing(&self) -> bool {
+        self.length.start == self.length.end
     }
 
     /// Returns whether, in whatever operations have happened to this interval since the last reset,
@@ -198,8 +209,12 @@ impl StringInterval {
     }
 
     pub fn union(&mut self, other: &Self) {
-        self.length.start = self.length.start.min(other.length.start);
-        self.length.end = self.length.end.min(other.length.end);
+        if self.is_nothing() {
+            self.clone_from(other);
+        } else if !other.is_nothing() {
+            self.length.start = self.length.start.min(other.length.start);
+            self.length.end = self.length.end.min(other.length.end);
+        }
     }
 }
 

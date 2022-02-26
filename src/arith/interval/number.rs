@@ -922,21 +922,21 @@ impl NumberIntervals {
     }
 
     #[must_use]
-    pub fn stringify(&self) -> Option<StringInterval> {
+    pub fn stringify(&self) -> StringInterval {
         if self.intervals.is_empty() {
-            return None;
+            return StringInterval::nothing();
         }
 
         let start = 0;  // placeholder
         let end = Number::MIN.to_string().len() as u16;  // placeholder
 
-        Some(StringInterval {
+        StringInterval {
             length: LengthInterval {
                 start,
                 end,
             },
             runtime_error: false,
-        })
+        }
     }
 
     #[must_use]
