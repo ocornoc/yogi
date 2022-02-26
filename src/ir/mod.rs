@@ -10,6 +10,26 @@ use super::*;
 use instr::*;
 pub use codegen::CodegenOptions;
 
+macro_rules! reg_fns {
+    ($new_name:ident, $ref_name:ident, $mut_name:ident, $reg:tt, $val:ty, $field:ident) => {
+        #[allow(dead_code)]
+        fn $new_name(&mut self, val: $val) -> $reg {
+            let len = self.$field.len();
+            self.$field.push(val.into());
+            $reg(len)
+        }
+
+        fn $ref_name(&self, reg: $reg) -> impl Deref<Target = $val> + '_ {
+            self.$field[reg.0].get()
+        }
+
+        fn $mut_name(&self, reg: $reg) -> impl DerefMut<Target = $val> + '_ {
+            self.$field[reg.0].get()
+        }
+    };
+}
+
+
 mod instr;
 mod codegen;
 mod optimize;
@@ -78,25 +98,6 @@ pub struct IRMachine {
     idents: Idents,
 }
 
-macro_rules! reg_fns {
-    ($new_name:ident, $ref_name:ident, $mut_name:ident, $reg:tt, $val:ty, $field:ident) => {
-        #[allow(dead_code)]
-        fn $new_name(&mut self, val: $val) -> $reg {
-            let len = self.$field.len();
-            self.$field.push(val.into());
-            $reg(len)
-        }
-
-        fn $ref_name(&self, reg: $reg) -> impl Deref<Target = $val> + '_ {
-            self.$field[reg.0].get()
-        }
-
-        fn $mut_name(&self, reg: $reg) -> impl DerefMut<Target = $val> + '_ {
-            self.$field[reg.0].get()
-        }
-    };
-}
-
 impl IRMachine {
     reg_fns!(new_num_reg, num_ref, num_mut, NumReg, Number, numbers);
     reg_fns!(new_str_reg, str_ref, str_mut, StrReg, YString, strings);
@@ -136,17 +137,14 @@ impl IRMachine {
             },
             Instruction::CopyNum(from, to) => {
                 profiling::scope!("execute_copy_num");
-                debug_assert_ne!(from, to);
                 *self.num_mut(to) = *self.num_ref(from);
             },
             Instruction::CopyStr(from, to) => {
                 profiling::scope!("execute_copy_str");
-                debug_assert_ne!(from, to);
                 self.str_mut(to).clone_from(&self.str_ref(from));
             },
             Instruction::CopyVal(from, to) => {
                 profiling::scope!("execute_copy_val");
-                debug_assert_ne!(from, to);
                 self.val_mut(to).clone_from(&self.val_ref(from));
             },
             Instruction::ValueifyNum(n, v) => {
@@ -209,7 +207,6 @@ impl IRMachine {
                 *self.num_mut(n) = !&*self.val_ref(v);
             },
             Instruction::AddNum(n1, n2) => {
-                debug_assert_ne!(n1, n2);
                 profiling::scope!("execute_add_num");
                 *self.num_mut(n1) += *self.num_ref(n2);
             },
@@ -221,7 +218,6 @@ impl IRMachine {
             },
             Instruction::AddStr(s1, s2) => {
                 profiling::scope!("execute_add_str");
-                debug_assert_ne!(s1, s2);
                 *self.str_mut(s1) += &self.str_ref(s2);
             },
             Instruction::AddSelfStr(s) => {
@@ -230,7 +226,6 @@ impl IRMachine {
             },
             Instruction::AddVal(v1, v2) => {
                 profiling::scope!("execute_add_val");
-                debug_assert_ne!(v1, v2);
                 *self.val_mut(v1) += &self.val_ref(v2);
             },
             Instruction::AddSelfVal(v) => {
@@ -247,17 +242,14 @@ impl IRMachine {
             },
             Instruction::SubNum(n1, n2) => {
                 profiling::scope!("execute_sub_num");
-                debug_assert_ne!(n1, n2);
                 *self.num_mut(n1) -= *self.num_ref(n2);
             },
             Instruction::SubStr(s1, s2) => {
                 profiling::scope!("execute_sub_str");
-                debug_assert_ne!(s1, s2);
                 *self.str_mut(s1) -= &self.str_ref(s2);
             },
             Instruction::SubVal(v1, v2) => {
                 profiling::scope!("execute_sub_val");
-                debug_assert_ne!(v1, v2);
                 *self.val_mut(v1) -= &self.val_ref(v2);
             },
             Instruction::SubSelfVal(v) => {
@@ -273,7 +265,6 @@ impl IRMachine {
             },
             Instruction::Mul(n1, n2) => {
                 profiling::scope!("execute_mul");
-                debug_assert_ne!(n1, n2);
                 let mut n = self.num_mut(n1);
                 let n2 = self.num_ref(n2).clone();
                 *n *= n2;
@@ -286,7 +277,6 @@ impl IRMachine {
             },
             Instruction::Div(n1, n2) => {
                 profiling::scope!("execute_div");
-                debug_assert_ne!(n1, n2);
                 let mut n = self.num_mut(n1);
                 let n2 = self.num_ref(n2).clone();
                 if let Ok(v) = *n / n2 {
@@ -307,7 +297,6 @@ impl IRMachine {
             },
             Instruction::Rem(n1, n2) => {
                 profiling::scope!("execute_rem");
-                debug_assert_ne!(n1, n2);
                 let mut n = self.num_mut(n1);
                 let n2 = self.num_ref(n2).clone();
                 if let Ok(v) = *n % n2 {
@@ -328,7 +317,6 @@ impl IRMachine {
             },
             Instruction::Pow(n1, n2) => {
                 profiling::scope!("execute_pow");
-                debug_assert_ne!(n1, n2);
                 let mut n = self.num_mut(n1);
                 let n2 = self.num_ref(n2).clone();
                 n.pow_assign(n2);
@@ -341,21 +329,18 @@ impl IRMachine {
             },
             Instruction::Eq(l, r, out) => {
                 profiling::scope!("execute_eq_val");
-                debug_assert_ne!(l, r);
                 let l = &*self.val_ref(l);
                 let r = &*self.val_ref(r);
                 *self.num_mut(out) = (l == r).into();
             },
             Instruction::Le(l, r, out) => {
                 profiling::scope!("execute_le_val");
-                debug_assert_ne!(l, r);
                 let l = &*self.val_ref(l);
                 let r = &*self.val_ref(r);
                 *self.num_mut(out) = (l <= r).into();
             },
             Instruction::Lt(l, r, out) => {
                 profiling::scope!("execute_lt_val");
-                debug_assert_ne!(l, r);
                 let l = &*self.val_ref(l);
                 let r = &*self.val_ref(r);
                 *self.num_mut(out) = (l < r).into();
@@ -438,7 +423,6 @@ impl IRMachine {
             },
             Instruction::And(n1, n2) => {
                 profiling::scope!("execute_and");
-                debug_assert_ne!(n1, n2);
                 let mut n = self.num_mut(n1);
                 let n2 = if n1 == n2 {
                     n.clone()
@@ -449,7 +433,6 @@ impl IRMachine {
             },
             Instruction::Or(n1, n2) => {
                 profiling::scope!("execute_or");
-                debug_assert_ne!(n1, n2);
                 let mut n = self.num_mut(n1);
                 let n2 = if n1 == n2 {
                     n.clone()
