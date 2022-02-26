@@ -60,8 +60,8 @@ impl ValueInterval {
     }
 
     pub fn reset_runtime_err(&mut self) {
-        self.numbers.reset_runtime_err();
-        self.strings.reset_runtime_err();
+        self.numbers.runtime_error = false;
+        self.strings.runtime_error = false;
     }
 
     pub fn could_runtime_err(&self) -> bool {
@@ -201,6 +201,16 @@ impl ValueInterval {
     pub fn set_to_bool(&mut self, bools: BoolInterval) {
         self.strings = StringInterval::nothing();
         self.numbers.set_to_bool(bools);
+    }
+
+    #[inline]
+    pub const fn numbers(&self) -> &NumberIntervals {
+        &self.numbers
+    }
+
+    #[inline]
+    pub const fn strings(&self) -> &StringInterval {
+        &self.strings
     }
 }
 

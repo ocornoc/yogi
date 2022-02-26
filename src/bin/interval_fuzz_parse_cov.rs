@@ -171,7 +171,7 @@ fn main() {
                 println!("max * max: runtime error");
             }
         }
-        println!("Could runtime error? {}", left.could_runtime_err());
+        println!("Could runtime error? {}", left.runtime_error);
     } else if rem {
         left %= &right;
         if let Some((left_min, left_max, right_min, right_max)) = left_right_min_max {
@@ -215,7 +215,7 @@ fn main() {
                 println!("max % max: runtime error");
             }
         }
-        println!("Could runtime error? {}", left.could_runtime_err());
+        println!("Could runtime error? {}", left.runtime_error);
     } else {
         println!("You forgot to select a mode.");
         return;

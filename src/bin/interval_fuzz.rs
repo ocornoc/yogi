@@ -72,7 +72,7 @@ mod everything {
         if left.as_ref().is_empty() || right.as_ref().is_empty() {
             left /= right;
             assert_eq!(left, NumberIntervals::nothing());
-            assert!(!left.could_runtime_err());
+            assert!(!left.runtime_error);
             return;
         }
         let (left_min, left_max) = get_min_max(left.as_ref()).expect("Failed to get left min/max");
@@ -91,14 +91,14 @@ mod everything {
         if let Ok(n) = left_max / right_max {
             assert!(left.contains(n));
         }
-        assert_eq!(left.could_runtime_err(), could_err);
+        assert_eq!(left.runtime_error, could_err);
     }
 
     fn fuzz_rem(mut left: NumberIntervals, right: &NumberIntervals) {
         if left.as_ref().is_empty() || right.as_ref().is_empty() {
             left %= right;
             assert_eq!(left, NumberIntervals::nothing());
-            assert!(!left.could_runtime_err());
+            assert!(!left.runtime_error);
             return;
         }
         let (left_min, left_max) = get_min_max(left.as_ref()).expect("Failed to get left min/max");
@@ -117,7 +117,7 @@ mod everything {
         if let Ok(n) = left_max % right_max {
             assert!(left.contains(n));
         }
-        assert_eq!(left.could_runtime_err(), could_err);
+        assert_eq!(left.runtime_error, could_err);
     }
     
     fn fuzz_inner(left: NumberIntervals, right: NumberIntervals) {

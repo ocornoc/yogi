@@ -652,7 +652,7 @@ impl Rem for Interval {
 pub struct NumberIntervals {
     #[as_ref]
     pub(super) intervals: Vec<Interval>,
-    pub(super) runtime_error: bool,
+    pub runtime_error: bool,
 }
 
 impl NumberIntervals {
@@ -715,17 +715,6 @@ impl NumberIntervals {
             intervals: Vec::with_capacity(Self::DEFAULT_ALLOC),
             runtime_error: false,
         }
-    }
-
-    /// Returns whether, in whatever operations have happened to this interval since the last reset,
-    /// could this interval have caused a runtime error.
-    pub const fn could_runtime_err(&self) -> bool {
-        self.runtime_error
-    }
-
-    /// Resets the runtime error possibility to `false`.
-    pub fn reset_runtime_err(&mut self) {
-        self.runtime_error = false;
     }
 
     pub fn contains(&self, number: Number) -> bool {
@@ -1521,7 +1510,7 @@ mod tests {
         let mut intervals = NumberIntervals::from(Number::new(12.0));
         let mut intervals2 = NumberIntervals::from(Number::new(3.0));
         intervals /= &intervals2;
-        assert!(!intervals.could_runtime_err());
+        assert!(!intervals.runtime_error);
         assert_eq!(intervals.intervals, [Number::new(4.0).into()]);
         intervals = NumberIntervals {
             intervals: vec![
@@ -1536,34 +1525,34 @@ mod tests {
             runtime_error: false,
         };
         intervals /= &intervals2;
-        assert!(!intervals.could_runtime_err());
+        assert!(!intervals.runtime_error);
         assert_eq!(intervals.intervals, [
             Interval::from(Number::new(-2.0)..=Number::new(-0.5)),
         ]);
         intervals = Number::MAX.into();
         intervals2 = Number::ONE.into();
         intervals /= &intervals2;
-        assert!(!intervals.could_runtime_err());
+        assert!(!intervals.runtime_error);
         assert_eq!(intervals.intervals, [Number(-1).into()]);
         intervals = Number::MAX.into();
         intervals2 = Number::ONE.into();
         intervals /= &intervals2;
-        assert!(!intervals.could_runtime_err());
+        assert!(!intervals.runtime_error);
         assert_eq!(intervals.intervals, [Number(-1).into()]);
         intervals = Number::MAX.into();
         intervals2 = (-Number::ONE).into();
         intervals /= &intervals2;
-        assert!(!intervals.could_runtime_err());
+        assert!(!intervals.runtime_error);
         assert_eq!(intervals.intervals, [Number(1).into()]);
         intervals = Number::MIN.into();
         intervals2 = Number::ONE.into();
         intervals /= &intervals2;
-        assert!(!intervals.could_runtime_err());
+        assert!(!intervals.runtime_error);
         assert_eq!(intervals.intervals, [Number::ZERO.into()]);
         intervals = Number::MIN.into();
         intervals2 = (-Number::ONE).into();
         intervals /= &intervals2;
-        assert!(!intervals.could_runtime_err());
+        assert!(!intervals.runtime_error);
         assert_eq!(intervals.intervals, [Number::ZERO.into()]);
     }
 
@@ -1572,32 +1561,32 @@ mod tests {
         let mut intervals = NumberIntervals::from(Number::new(12.0));
         let mut intervals2 = NumberIntervals::from(Number::new(3.0));
         intervals %= &intervals2;
-        assert!(!intervals.could_runtime_err());
+        assert!(!intervals.runtime_error);
         assert_eq!(intervals.intervals, [Number::ZERO.into()]);
         intervals = Number::new(12.0).into();
         intervals2 = Number::new(5.0).into();
         intervals %= &intervals2;
-        assert!(!intervals.could_runtime_err());
+        assert!(!intervals.runtime_error);
         assert_eq!(intervals.intervals, [Number::new(2.0).into()]);
         intervals = Number::new(-12.0).into();
         intervals2 = Number::new(3.0).into();
         intervals %= &intervals2;
-        assert!(!intervals.could_runtime_err());
+        assert!(!intervals.runtime_error);
         assert_eq!(intervals.intervals, [Number::ZERO.into()]);
         intervals = Number::new(-12.0).into();
         intervals2 = Number::new(5.0).into();
         intervals %= &intervals2;
-        assert!(!intervals.could_runtime_err());
+        assert!(!intervals.runtime_error);
         assert_eq!(intervals.intervals, [Number::new(-2.0).into()]);
         intervals = Number::new(27.0).into();
         intervals2.intervals = vec![Interval::from(Number::new(7.0)..=Number::new(8.0))];
         intervals %= &intervals2;
-        assert!(!intervals.could_runtime_err());
+        assert!(!intervals.runtime_error);
         assert_eq!(intervals.intervals, [Interval::from(Number::ZERO..Number::new(8.0))]);
         intervals.intervals = vec![Number::new(5.0).into(), Number::new(6.0).into()];
         intervals2 = Number::new(3.0).into();
         intervals %= &intervals2;
-        assert!(!intervals.could_runtime_err());
+        assert!(!intervals.runtime_error);
         assert_eq!(intervals.intervals, [Number::ZERO.into(), Number::new(2.0).into()]);
         intervals.intervals = vec![
             Interval::from(Number::new(71776119061217.279)..=Number::new(9187201950427381.888)),
@@ -1605,7 +1594,7 @@ mod tests {
         ];
         intervals2 = Number::new(9187201950435737.471).into();
         intervals %= &intervals2;
-        assert!(!intervals.could_runtime_err());
+        assert!(!intervals.runtime_error);
         assert_eq!(intervals.intervals, [
             Number::ZERO.into(),
             Interval::from(Number::new(71776119061217.279)..=Number::new(9187201950427381.888)),
@@ -1613,7 +1602,7 @@ mod tests {
         intervals = Number::new(5.0).into();
         intervals2.intervals = vec![Interval::from(Number::new(2.0)..=Number::new(3.0))];
         intervals %= &intervals2;
-        assert!(!intervals.could_runtime_err());
+        assert!(!intervals.runtime_error);
         assert_eq!(intervals.intervals, [Interval::from(Number::ZERO..Number::new(3.0))]);
         intervals.intervals = vec![
             Interval::from(Number::new(-0.129)..=Number::new(1099511627.775)),
@@ -1622,11 +1611,11 @@ mod tests {
             Interval::from(Number::new(-0.001)..=Number::new(16777.215)),
         ];
         intervals %= &intervals2;
-        assert!(intervals.could_runtime_err());
+        assert!(intervals.runtime_error);
         assert_eq!(intervals.intervals, [
             Interval::from(Number::new(-16777.214)..=Number::new(16777.214)),
         ]);
-        intervals.reset_runtime_err();
+        intervals.runtime_error = false;
         intervals.intervals = vec![
             Interval::from(Number(-9222790894089797632)..=Number::new(262.148)),
         ];
@@ -1634,11 +1623,11 @@ mod tests {
             Interval::from(Number(-4971411038663605760)..=Number(68961369294110720)),
         ];
         intervals %= &intervals2;
-        assert!(intervals.could_runtime_err());
+        assert!(intervals.runtime_error);
         assert_eq!(intervals.intervals, [
             Interval::from(Number(-4971411038663605759)..=Number(4971411038663605759)),
         ]);
-        intervals.reset_runtime_err();
+        intervals.runtime_error = false;
         intervals.intervals = vec![
             Interval::from(Number::new(-17592186044.417)..=Number::new(-0.129)),
             Interval::from(Number::new(-0.001)..=Number::new(4398046511.359)),
@@ -1647,11 +1636,11 @@ mod tests {
             Interval::from(Number::MIN..=Number::new(-0.001)),
         ];
         intervals %= &intervals2;
-        assert!(!intervals.could_runtime_err());
+        assert!(!intervals.runtime_error);
         assert_eq!(intervals.intervals, [
             Interval::from(Number(-9223372036854775806)..Number::MAX),
         ]);
-        intervals.reset_runtime_err();
+        intervals.runtime_error = false;
         intervals.intervals = vec![
             Number::MIN.into(),
             Interval::from(Number(-36170086435815553)..=Number::MAX),
@@ -1661,7 +1650,7 @@ mod tests {
             Interval::from(Number(-4539628415531089920)..=Number(43910186561175552)),
         ];
         intervals %= &intervals2;
-        assert!(intervals.could_runtime_err());
+        assert!(intervals.runtime_error);
         assert_eq!(intervals.intervals, [
             Interval::from(Number(-4629771061636907072)..=Number(4629771061636907072)),
         ]);

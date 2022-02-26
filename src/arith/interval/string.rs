@@ -120,14 +120,10 @@ impl Sub for LengthInterval {
 #[derive(Debug, Clone, Eq, Serialize, Deserialize)]
 pub struct StringInterval {
     pub(super) length: LengthInterval,
-    pub(super) runtime_error: bool,
+    pub runtime_error: bool,
 }
 
 impl StringInterval {
-    pub fn reset_runtime_err(&mut self) {
-        self.runtime_error = false;
-    }
-
     pub fn everything() -> Self {
         StringInterval {
             length: LengthInterval::from(..),
@@ -144,12 +140,6 @@ impl StringInterval {
 
     pub fn is_nothing(&self) -> bool {
         self.length.start == self.length.end
-    }
-
-    /// Returns whether, in whatever operations have happened to this interval since the last reset,
-    /// could this interval have caused a runtime error.
-    pub const fn could_runtime_err(&self) -> bool {
-        self.runtime_error
     }
 
     pub fn pre_inc(&mut self) {
