@@ -34,15 +34,14 @@ fn print_results(
     setup_s: f32,
     elapsed_s: f32,
     elapsed_lines: usize,
-    samples: Vec<f32>,
+    samples: Vec<(f32, f32)>,
 ) {
     let mean_lps = elapsed_lines as f32 / elapsed_s;
-    let mean_spl = mean_lps.recip();
     let top: f32 = samples
         .iter()
-        .map(|&s| (s.recip() - mean_spl).powi(2))
+        .map(|&(dur, sample_size)| (sample_size / dur - mean_lps).powi(2))
         .sum::<f32>();
-    let bot: f32 = (samples.len() - 1) as f32;
+    let bot: f32 = samples.len() as f32;
     let stddev_lps = (top / bot).sqrt();
     let results = DataResults {
         vars: vm
@@ -128,6 +127,7 @@ fn setup_and_bench(
             }
         }
 
+        let lines_start = elapsed_lines;
         let inner_start = Instant::now();
 
         for _ in 0..max_lines.min(1000) {
@@ -139,7 +139,8 @@ fn setup_and_bench(
             }
         }
 
-        samples.push(inner_start.elapsed());
+        let elapsed = inner_start.elapsed();
+        samples.push((elapsed, (lines_start - elapsed_lines) as f32));
         max_lines = max_lines.saturating_sub(1000);
     }
 
@@ -151,7 +152,7 @@ fn setup_and_bench(
         setup_s,
         elapsed_s,
         elapsed_lines,
-        iter.map(|d| d.as_secs_f32()).collect(),
+        iter.map(|(d, s)| (d.as_secs_f32(), s)).collect(),
     );
     Ok(())
 }

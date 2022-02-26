@@ -68,7 +68,7 @@ fn main() {
     let mean_spl = mean_lps.recip();
     let top: f32 = samples
         .iter()
-        .map(|&s| (s.recip() - mean_spl).powi(2))
+        .map(|&s| ((SAMPLE_SIZE as f32) / s - mean_lps).powi(2))
         .sum::<f32>();
     let bot: f32 = SAMPLES as f32;
     // standard deviation for lines per second
