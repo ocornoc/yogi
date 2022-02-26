@@ -143,6 +143,18 @@ impl<T, U: for<'a> BorrowChecker<'a, T>> DebugCell<T, U> {
             checker: &self.checker,
         }
     }
+
+    #[inline]
+    pub fn convert<T2>(self) -> DebugCell<T2, U>
+    where
+        T: Into<T2>,
+        U: for<'a> BorrowChecker<'a, T2>,
+    {
+        DebugCell {
+            checker: self.checker,
+            value: UnsafeCell::new(self.value.into_inner().into()),
+        }
+    }
 }
 
 impl<T: Default, U: for<'a> BorrowChecker<'a, T>> Default for DebugCell<T, U> {
