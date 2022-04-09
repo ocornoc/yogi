@@ -18,8 +18,14 @@ opt-level = 1
 opt-level = 3
 
 [profile.release]
+lto = "thin"
+
+[profile.opt]
+inherits = "release"
+opt-level = 3
 strip = true
 lto = "fat"
+codegen-units = 1
 
 [target.'cfg(target_os = "linux")'.dependencies]
 honggfuzz = "0.5.54"
